@@ -117,7 +117,7 @@ def get_recent_cves():
 
 search_counter = 0
 
-@app.get("/increment-search")
+@app.post("/api/stats/increment-search")
 def increment_search():
     global search_counter
     search_counter += 1
