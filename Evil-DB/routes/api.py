@@ -18,7 +18,8 @@ class ThreatCheckResponse(BaseModel):
     notes: Optional[str] = None
 
 def query_threat_db(indicator_type: str, value: str) -> ThreatCheckResponse:
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
     cur = conn.cursor()
     cur.execute("SELECT category, source, severity, notes FROM threat_indicators WHERE type=? AND value=?", (indicator_type, value))
     row = cur.fetchone()
@@ -33,7 +34,8 @@ def check_threat(type: str = Query(..., pattern="^(ip|email|domain)$"), value: s
 
 @router.get("/list", response_model=List[ThreatCheckResponse])
 def list_threats(limit: int = 100):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
     cur = conn.cursor()
     cur.execute("SELECT value, category, source, severity, notes FROM threat_indicators LIMIT ?", (limit,))
     rows = cur.fetchall()
@@ -45,7 +47,8 @@ def list_threats(limit: int = 100):
 
 @router.get("/search", response_model=List[ThreatCheckResponse])
 def search_threats(q: str, limit: int = 50):
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
     cur = conn.cursor()
     like_query = f"%{q}%"
     cur.execute("""
@@ -63,7 +66,8 @@ def search_threats(q: str, limit: int = 50):
 
 @router.get("/stats/entries")
 def get_entry_count():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
     cur = conn.cursor()
     cur.execute("SELECT COUNT(*) FROM threat_indicators")
     count = cur.fetchone()[0]
@@ -101,7 +105,8 @@ search_counter = 0
 
 @router.get("/stats/type-breakdown")
 def type_breakdown():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+    conn.execute("PRAGMA journal_mode=WAL;")
     cur = conn.cursor()
     cur.execute("SELECT category, COUNT(*) FROM threat_indicators GROUP BY category")
     rows = cur.fetchall()
