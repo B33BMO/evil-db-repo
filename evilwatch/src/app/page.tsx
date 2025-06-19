@@ -235,7 +235,7 @@ export default function Home() {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-[#333333] rounded-lg p-4 shadow">
-                <h4 className="text-xl font-semibold mb-2 text-[#e0e0e0]">🧠 Threat Details</h4>
+                <h4 className="text-xl font-semibold mb-2 text-[#e0e0e0]">Threat Details</h4>
                 <p><strong>Value:</strong> {selectedThreat.value}</p>
                 <p><strong>Category:</strong> {selectedThreat.category}</p>
                 <p><strong>Source:</strong> {selectedThreat.source}</p>
@@ -244,7 +244,7 @@ export default function Home() {
               </div>
               {geoInfo && (
                 <div className="bg-[#333333] rounded-lg p-4 shadow">
-                  <h4 className="text-xl font-semibold mb-2 text-[#e0e0e0]">🌍 GeoIP Info</h4>
+                  <h4 className="text-xl font-semibold mb-2 text-[#e0e0e0]">GeoIP Info</h4>
                   <p><strong>IP:</strong> {geoInfo.ip}</p>
                   <p><strong>Country:</strong> {geoInfo.country}</p>
                   <p><strong>City:</strong> {geoInfo.city}</p>
@@ -253,7 +253,7 @@ export default function Home() {
               )}
               {neutrinoInfo && (
                 <div className="bg-[#333333] rounded-lg p-4 shadow md:col-span-2">
-                  <h4 className="text-xl font-semibold mb-2 text-[#e0e0e0]">🧪 Enrichment Report</h4>
+                  <h4 className="text-xl font-semibold mb-2 text-[#e0e0e0]">Enrichment Report</h4>
                   <p><strong>Blocklisted:</strong> {neutrinoInfo.blocklist ? 'Yes' : 'No'}</p>
                   <p><strong>Reason:</strong> {neutrinoInfo.reason || 'N/A'}</p>
                   <p><strong>Country:</strong> {neutrinoInfo.country || 'N/A'}</p>
