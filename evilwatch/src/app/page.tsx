@@ -254,11 +254,11 @@ export default function Home() {
               {neutrinoInfo && (
                 <div className="bg-[#333333] rounded-lg p-4 shadow md:col-span-2">
                   <h4 className="text-xl font-semibold mb-2 text-[#e0e0e0]">🧪 Enrichment Report</h4>
-                  <p><strong>Source:</strong> {'source_used' in (neutrinoInfo || {}) ? (neutrinoInfo as NeutrinoInfo & { source_used?: string }).source_used ?? 'Neutrino' : 'Neutrino'}</p>
+                  <p><strong>Source:</strong> {"source_used" in (neutrinoInfo || {}) ? (neutrinoInfo as NeutrinoInfo & { source_used?: string }).source_used ?? 'Unknown' : 'Neutrino'}</p>
                   <p><strong>Blocklisted:</strong> {neutrinoInfo.blocklist ? 'Yes' : 'No'}</p>
-                  <p><strong>Reason:</strong> {neutrinoInfo.reason}</p>
-                  <p><strong>Country:</strong> {neutrinoInfo.country}</p>
-                  <p><strong>Host:</strong> {neutrinoInfo.host}</p>
+                  <p><strong>Reason:</strong> {neutrinoInfo.reason || "N/A"}</p>
+                  <p><strong>Country:</strong> {neutrinoInfo.country || "N/A"}</p>
+                  <p><strong>Host:</strong> {neutrinoInfo.host || "N/A"}</p>
                 </div>
               )}
             </div>
