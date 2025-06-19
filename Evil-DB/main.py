@@ -149,10 +149,23 @@ def fallback_search(value: str):
         except Exception as e:
             print(f"Neutrino error: {e}")
 
+        if not neutrino_data:
+            try:
+                ipqs_key = os.getenv("IPQS_KEY", "")
+                r = requests.get(
+                    f"https://ipqualityscore.com/api/json/ip/{ipqs_key}/{value}"
+                )
+                if r.ok:
+                    neutrino_data = r.json()
+                    neutrino_data["source"] = "ipqualityscore"
+            except Exception as e:
+                print(f"IPQS fallback error: {e}")
+
     return {
         "db_match": result.dict(),
         "geo": geo_data,
-        "neutrino": neutrino_data
+        "neutrino": neutrino_data,
+        "source_used": neutrino_data.get("source", "none")
     }
 @app.get("/stats/type-breakdown")
 def get_type_breakdown():
