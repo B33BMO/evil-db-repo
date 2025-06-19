@@ -95,7 +95,8 @@ def search_threats(q: str, limit: int = 50):
 def get_entry_count():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM threat_indicators")
+    # Count only unique entries by value
+    cur.execute("SELECT COUNT(DISTINCT value) FROM threat_indicators")
     count = cur.fetchone()[0]
     conn.close()
     return {"count": count}
