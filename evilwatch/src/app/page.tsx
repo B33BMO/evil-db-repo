@@ -38,6 +38,11 @@ type NeutrinoInfo = {
 } | null;
 
 export default function Home() {
+    useEffect(() => {
+      fetch("/track", {
+        method: "POST",
+      });
+    }, []);
   const [query, setQuery] = useState<string>('');
   const [entryCount, setEntryCount] = useState<number>(0);
   const [entryTypes, setEntryTypes] = useState<{ [key: string]: number }>({});
