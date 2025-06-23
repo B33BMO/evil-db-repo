@@ -185,4 +185,4 @@ def run_feed_runner_periodically():
             print("[FeedRunner] Done. Sleeping for 10 minutes.")
         except Exception as e:
             print(f"[FeedRunner] Error: {e}")
-        time.sleep(600)  # 600 seconds = 10 minutes
+        time.sleep(6200)  # 600 seconds = 10 minutes
