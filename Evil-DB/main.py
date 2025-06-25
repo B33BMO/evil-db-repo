@@ -5,22 +5,11 @@ import sqlite3
 import os
 import requests
 import feedparser
-from fastapi import FastAPI
 from routes import api, neutrino
 import threading
 import time
 import subprocess
-
-
-app = FastAPI(title="EvilWatch API", version="0.1")
-app.include_router(api.router, prefix="/api")
-app.include_router(neutrino.router, prefix="/neutrino")
-@app.on_event("startup")
-def startup_tasks():
-    check_db()
-    thread = threading.Thread(target=run_feed_runner_periodically, daemon=True)
-    thread.start()
-
+from contextlib import asynccontextmanager
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "db", "threats.db")
@@ -37,22 +26,58 @@ class ThreatCheckResponse(BaseModel):
     severity: Optional[str] = None
     notes: Optional[str] = None
 
+def check_db():
+    if not os.path.exists(DB_PATH):
+        raise RuntimeError(f"Database not found at {DB_PATH}")
+
+    # Add indexes for performance
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cur = conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL;")  # Enable faster write mode
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_type_value ON threat_indicators(type, value);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_value ON threat_indicators(value);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_category ON threat_indicators(category);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_source ON threat_indicators(source);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_notes ON threat_indicators(notes);")
+    conn.commit()
+    conn.close()
+
+def run_feed_runner_periodically():
+    while True:
+        try:
+            print("[FeedRunner] Running feed_runner.py…")
+            subprocess.run(["python3", "./feeds/feed_runner.py"], check=True)
+            print("[FeedRunner] Done. Sleeping for 10 minutes.")
+        except Exception as e:
+            print(f"[FeedRunner] Error: {e}")
+        time.sleep(600)  # 600 seconds = 10 minutes
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    check_db()
+    thread = threading.Thread(target=run_feed_runner_periodically, daemon=True)
+    thread.start()
+    yield
+    # Any cleanup logic (if needed) goes here
+
+app = FastAPI(
+    title="EvilWatch API",
+    version="0.1",
+    lifespan=lifespan
+)
+app.include_router(api.router, prefix="/api")
+app.include_router(neutrino.router, prefix="/neutrino")
+
 def query_threat_db(indicator_type: str, value: str) -> ThreatCheckResponse:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("SELECT category, source, severity, notes FROM threat_indicators WHERE type=? AND value=?", (indicator_type, value))
     row = cur.fetchone()
     conn.close()
-
     if row:
         return ThreatCheckResponse(match=True, value=value, category=row[0], source=row[1], severity=row[2], notes=row[3])
     else:
         return ThreatCheckResponse(match=False, value=value)
-
-@app.on_event("startup")
-def check_db():
-    if not os.path.exists(DB_PATH):
-        raise RuntimeError(f"Database not found at {DB_PATH}")
 
 @app.get("/check", response_model=ThreatCheckResponse)
 def check_threat(
@@ -75,6 +100,8 @@ def list_threats(limit: int = 100):
 
 @app.get("/search", response_model=List[ThreatCheckResponse])
 def search_threats(q: str, limit: int = 50):
+    import time as _time
+    start = _time.time()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     like_query = f"%{q}%"
@@ -86,6 +113,7 @@ def search_threats(q: str, limit: int = 50):
     """, (like_query, like_query, like_query, like_query, limit))
     rows = cur.fetchall()
     conn.close()
+    print(f"[Search] Took {_time.time() - start:.3f} sec for query: {q}")
     return [
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
@@ -168,6 +196,7 @@ def fallback_search(value: str):
         "neutrino": neutrino_data,
         "source_used": neutrino_data.get("source", "none")
     }
+
 @app.get("/stats/type-breakdown")
 def get_type_breakdown():
     conn = sqlite3.connect(DB_PATH)
@@ -177,12 +206,3 @@ def get_type_breakdown():
     conn.close()
     # Return as a dict {category: count}
     return {row[0]: row[1] for row in rows}
-def run_feed_runner_periodically():
-    while True:
-        try:
-            print("[FeedRunner] Running feed_runner.py…")
-            subprocess.run(["python3", "./feeds/feed_runner.py"], check=True)
-            print("[FeedRunner] Done. Sleeping for 10 minutes.")
-        except Exception as e:
-            print(f"[FeedRunner] Error: {e}")
-        time.sleep(6200)  # 600 seconds = 10 minutes
