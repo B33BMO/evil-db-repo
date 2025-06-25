@@ -1,20 +1,8 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect } from 'react';
-import {
-  searchThreat,
-  getEntryCount,
-  getSearchCount,
-  getCVEs,
-  getGeoInfo,
-  getNeutrinoInfo,
-  saveNeutrinoInfo,
-  getCachedNeutrinoInfo,
-  getEntryTypeBreakdown
-} from "@/lib/api";
 import { FaLock, FaDatabase, FaSearch, FaArrowLeft, FaGlobe } from 'react-icons/fa';
 
-// ----- TYPE DEFINITIONS -----
 type GeoInfo = {
   ip: string;
   country: string;
@@ -33,10 +21,10 @@ type ThreatInfo = {
 } | null;
 
 type NeutrinoInfo = {
-  blocklist: boolean;
-  reason: string;
-  country: string;
-  host: string;
+  blocklist?: boolean;
+  reason?: string;
+  country?: string;
+  host?: string;
 } | null;
 
 type CVE = { title: string; link: string; };
@@ -45,60 +33,36 @@ type RawCVE = { title?: string; name?: string; cve_id?: string; link?: string; u
 const isIP = (str: string) => /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(str);
 
 export default function Home() {
-  useEffect(() => {
-    fetch("/track", { method: "POST" });
-  }, []);
+  useEffect(() => { fetch("/track", { method: "POST" }); }, []);
 
-  const [query, setQuery] = useState<string>('');
-  const [entryCount, setEntryCount] = useState<number>(0);
+  const [query, setQuery] = useState('');
+  const [entryCount, setEntryCount] = useState(0);
   const [entryTypes, setEntryTypes] = useState<{ [key: string]: number }>({});
-  const [searchCount, setSearchCount] = useState<number>(0);
+  const [searchCount, setSearchCount] = useState(0);
   const [cves, setCves] = useState<CVE[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedThreat, setSelectedThreat] = useState<ThreatInfo>(null);
   const [geoInfo, setGeoInfo] = useState<GeoInfo>(null);
   const [neutrinoInfo, setNeutrinoInfo] = useState<NeutrinoInfo>(null);
-  const [showResult, setShowResult] = useState<boolean>(false);
+  const [showResult, setShowResult] = useState(false);
 
+  // --- Modern search, using /api/fallback for all enrichment ---
   const handleSearch = async () => {
     if (!query.trim()) return;
     try {
-      const data = await searchThreat(query);
-  
-      // Threat: single object or null, ALWAYS with all fields populated
-      let threat: ThreatInfo | null = null;
-      if (Array.isArray(data)) {
-        // Use the first item ONLY if all fields are present and strings
-        if (
-          data.length > 0 &&
-          data[0] &&
-          typeof data[0].value === "string" &&
-          typeof data[0].category === "string" &&
-          typeof data[0].source === "string" &&
-          typeof data[0].severity === "string" &&
-          typeof data[0].notes === "string"
-        ) {
-          threat = data[0];
-        }
-      } else if (
-        data &&
-        typeof data.value === "string" &&
-        typeof data.category === "string" &&
-        typeof data.source === "string" &&
-        typeof data.severity === "string" &&
-        typeof data.notes === "string"
-      ) {
+      // Step 1: Find threat in DB (search endpoint)
+      let data: any = await fetch(`/api/search?q=${encodeURIComponent(query)}`).then(r => r.json());
+      let threat: ThreatInfo = null;
+      if (Array.isArray(data) && data.length && data[0]?.value) {
         threat = {
-          value: data.value,
-          category: data.category,
-          source: data.source,
-          severity: data.severity,
-          notes: data.notes
+          value: data[0].value,
+          category: data[0].category,
+          source: data[0].source,
+          severity: data[0].severity,
+          notes: data[0].notes
         };
-      }
-  
-      // If no threat found, always use the fallback object
-      if (!threat) {
+      } else {
+        // fallback: use query as value
         threat = {
           value: query,
           category: "N/A",
@@ -107,31 +71,44 @@ export default function Home() {
           notes: "Not found in DB"
         };
       }
-  
       setSelectedThreat(threat);
       setShowResult(true);
-  
-      // Geo/Neutrino logic: only for IPs
+
+      // Step 2: Get enrichment ONLY via your backend (no more browser CORS errors!)
       if (isIP(threat.value)) {
-        const ipVal = threat.value.split('/')[0];
-        getGeoInfo(ipVal)
-          .then((g) => setGeoInfo(g))
-          .catch(() => setGeoInfo(null));
-        getCachedNeutrinoInfo(ipVal)
-          .then((info) => setNeutrinoInfo(info as NeutrinoInfo))
-          .catch(() => setNeutrinoInfo(null));
-  
-        // Always call Neutrino API to refresh cache if you want, or only if not cached
-        const cached = await getCachedNeutrinoInfo(ipVal);
-        if (!cached) {
-          const live = await getNeutrinoInfo(ipVal);
-          if (live) await saveNeutrinoInfo(ipVal, live);
+        const resp = await fetch(`/api/fallback?value=${encodeURIComponent(threat.value)}`);
+        const enrich = await resp.json();
+
+        // Geo
+        if (enrich.geo && enrich.geo.status !== "fail") {
+          setGeoInfo({
+            ip: enrich.geo.query || threat.value,
+            country: enrich.geo.country || "",
+            city: enrich.geo.city || "",
+            isp: enrich.geo.isp || "",
+            lat: enrich.geo.lat,
+            lon: enrich.geo.lon,
+          });
+        } else {
+          setGeoInfo(null);
+        }
+
+        // Neutrino/IPQS
+        if (enrich.neutrino) {
+          setNeutrinoInfo({
+            blocklist: enrich.neutrino.blocklist ?? false,
+            reason: enrich.neutrino.reason || enrich.neutrino.message || "N/A",
+            country: enrich.neutrino.country || "N/A",
+            host: enrich.neutrino.host || "N/A"
+          });
+        } else {
+          setNeutrinoInfo(null);
         }
       } else {
         setGeoInfo(null);
         setNeutrinoInfo(null);
       }
-  
+
       await fetch('/api/stats/increment-search', { method: 'POST' });
       setSearchCount((prev) => prev + 1);
     } catch (err) {
@@ -139,7 +116,6 @@ export default function Home() {
       setError("Failed to fetch search results.");
     }
   };
-  
 
   const handleBack = () => {
     setShowResult(false);
@@ -151,23 +127,23 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const fetchStats = async () => {
+    // Stats, CVEs, etc
+    (async () => {
       try {
-        const [entries, searches, typeBreakdown] = await Promise.all([
-          getEntryCount(),
-          getSearchCount(),
-          getEntryTypeBreakdown()
-        ]);
+        const entries = await fetch("/api/stats/entries").then(r => r.json());
+        const searches = await fetch("/api/stats/searches").then(r => r.json());
+        const typeBreakdown = await fetch("/api/stats/type-breakdown").then(r => r.json());
         setEntryCount(entries.count);
         setSearchCount(searches.count);
         setEntryTypes(typeBreakdown);
       } catch (err) {
         console.error("Failed to fetch stats:", err);
       }
-    };
-    const fetchCVEs = async () => {
+    })();
+
+    (async () => {
       try {
-        const data = await getCVEs();
+        const data = await fetch("/api/rss/cves").then(r => r.json());
         setCves(
           data.items.slice(0, 5).map((item: RawCVE) => ({
             title: item.title || item.name || item.cve_id || "Unknown CVE",
@@ -177,12 +153,9 @@ export default function Home() {
       } catch (err) {
         console.error("Failed to fetch CVEs:", err);
       }
-    };
-    fetchStats();
-    fetchCVEs();
+    })();
   }, []);
 
-  // 🌎 Map placeholder — replace with a real map if you want
   const MapPanel = ({ geo }: { geo: GeoInfo }) =>
     geo && geo.country && geo.city && geo.ip && geo.lat && geo.lon ? (
       <div className="bg-[#222] rounded-xl p-4 shadow-lg h-full flex flex-col justify-between">
@@ -204,7 +177,6 @@ export default function Home() {
       </div>
     );
 
-  // 💻 Detection panel
   const DetectionPanel = ({ threat }: { threat: ThreatInfo }) => (
     <div className="bg-[#2b2b2b] p-6 rounded-xl shadow-lg flex flex-col h-full">
       <h4 className="text-xl font-bold mb-2 text-red-400">Detections &amp; Reason</h4>
@@ -215,7 +187,6 @@ export default function Home() {
     </div>
   );
 
-  // 👑 Main render
   return (
     <div className="min-h-screen bg-[#1e1e1e] text-[#e0e0e0] p-6 font-sans">
       <header className="flex items-center mb-8">
@@ -351,7 +322,7 @@ export default function Home() {
               <li><span className="text-[#7fd1f7]">GET</span> /api/search?q=&lt;value&gt; – Search for threats by IP, domain, or email</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/stats/entries – Total DB entry count</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/stats/type-breakdown – Count by type/category</li>
-              <li><span className="text-[#7fd1f7]">GET</span> /api/stats/searches – Total search count (because who doesn&rsquo;t love stats?)</li>
+              <li><span className="text-[#7fd1f7]">GET</span> /api/stats/searches – Total search count (because who doesn’t love stats?)</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/rss/cves – Latest CVE news (straight from the abyss)</li>
               <li><span className="text-[#7fd1f7]">POST</span> /api/stats/increment-search – Increment search count (every click counts)</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/check?type=&lt;ip|domain|email&gt;&amp;value=&lt;value&gt; – Check for an exact indicator match</li>
