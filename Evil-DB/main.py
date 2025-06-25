@@ -173,7 +173,7 @@ def increment_search():
     search_counter += 1
     return {"count": search_counter}
 
-@app.get("/fallback")
+@app.get("/api/fallback")
 def fallback_search(value: str):
     """
     Single API endpoint for enrichment: DB, GeoIP, Neutrino, IPQualityScore.
