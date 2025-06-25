@@ -83,7 +83,7 @@ def fallback_search(value: str):
             r = requests.post(
                 "https://neutrinoapi.net/ip-blocklist",
                 data={"ip": value},
-                auth=(os.getenv("NEUTRINO_USER", ""), os.getenv("NEUTRINO_KEY", ""))
+                auth=(NEUTRINO_USER, NEUTRINO_KEY)
             )
             if r.ok:
                 neutrino_data = r.json()
@@ -179,7 +179,7 @@ def enrich_ip(ip: str):
         r = requests.post(
             "https://neutrinoapi.net/ip-blocklist",
             data={"ip": ip},
-            auth=(user, key)
+            auth=(NEUTRINO_USER, NEUTRINO_KEY)
         )
         if r.ok:
             neutrino_data = r.json()
