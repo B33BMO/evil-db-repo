@@ -47,7 +47,26 @@ def get_feed_lines(url):
         print(f"❌ Failed to fetch {url}: {e}")
         return []
 
-
+def neutrino_blocklist():
+    print("🛡️  Neutrino API Blocklist Bulk Download…")
+    user_id = "b33bmo"
+    api_key = "m8Jm8MF4qhXJqWE8cS6xJVeb9I2dvU46TN3EShO6E800FC9Z"
+    url = "https://neutrinoapi.net/ip-blocklist-download"
+    try:
+        resp = requests.post(url, data={"user-id": user_id, "api-key": api_key}, timeout=60)
+        resp.raise_for_status()
+        count = 0
+        for ip in resp.text.splitlines():
+            ip = ip.strip()
+            if not ip or ip.startswith("#"):
+                continue
+            insert_ip(ip, "blocklist", "neutrino_bulk", "high", "Neutrino bulk blocklist")
+            count += 1
+            if count % 10000 == 0:
+                print(f"  ...imported {count} IPs so far")
+        print(f"✅ Neutrino bulk: {count} IPs imported")
+    except Exception as e:
+        print(f"❌ Neutrino blocklist download failed: {e}")
 def parse_feed_ips(text, split_on=None, col=0):
     for line in text.splitlines():
         if line.startswith("#") or not line.strip():
@@ -201,26 +220,7 @@ def run_all_feeds():
     urlhaus()
     print("✅ Done.")
 
-def neutrino_blocklist():
-    print("🛡️  Neutrino API Blocklist Bulk Download…")
-    user_id = "b33bmo"
-    api_key = "m8Jm8MF4qhXJqWE8cS6xJVeb9I2dvU46TN3EShO6E800FC9Z"
-    url = "https://neutrinoapi.net/ip-blocklist-download"
-    try:
-        resp = requests.post(url, data={"user-id": user_id, "api-key": api_key}, timeout=60)
-        resp.raise_for_status()
-        count = 0
-        for ip in resp.text.splitlines():
-            ip = ip.strip()
-            if not ip or ip.startswith("#"):
-                continue
-            insert_ip(ip, "blocklist", "neutrino_bulk", "high", "Neutrino bulk blocklist")
-            count += 1
-            if count % 10000 == 0:
-                print(f"  ...imported {count} IPs so far")
-        print(f"✅ Neutrino bulk: {count} IPs imported")
-    except Exception as e:
-        print(f"❌ Neutrino blocklist download failed: {e}")
+
 
 
 if __name__ == "__main__":
