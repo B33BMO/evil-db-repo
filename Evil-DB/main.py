@@ -206,3 +206,4 @@ def get_type_breakdown():
     conn.close()
     # Return as a dict {category: count}
     return {row[0]: row[1] for row in rows}
+ 
