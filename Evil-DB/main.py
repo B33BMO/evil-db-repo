@@ -11,29 +11,37 @@ import time
 import subprocess
 from contextlib import asynccontextmanager
 
+# --- FastAPI app with CORS (edit for production) ---
+from fastapi.middleware.cors import CORSMiddleware
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "db", "threats.db")
 
-# Optional: Environment variables for Neutrino credentials
 NEUTRINO_API_USER = os.getenv("NEUTRINO_USER", "")
 NEUTRINO_API_KEY = os.getenv("NEUTRINO_KEY", "")
 
-class ThreatCheckResponse(BaseModel):
-    match: bool
-    value: str
-    category: Optional[str] = None
-    source: Optional[str] = None
-    severity: Optional[str] = None
-    notes: Optional[str] = None
+app = FastAPI(
+    title="EvilWatch API",
+    version="0.1"
+)
 
+# Allow ALL origins (dev); restrict for production!
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # TODO: Set this to ["https://evil-db.io"] in prod!
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Threaded feed updater ---
 def check_db():
     if not os.path.exists(DB_PATH):
         raise RuntimeError(f"Database not found at {DB_PATH}")
 
-    # Add indexes for performance
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cur = conn.cursor()
-    cur.execute("PRAGMA journal_mode=WAL;")  # Enable faster write mode
+    cur.execute("PRAGMA journal_mode=WAL;")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_type_value ON threat_indicators(type, value);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_value ON threat_indicators(value);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_category ON threat_indicators(category);")
@@ -50,7 +58,7 @@ def run_feed_runner_periodically():
             print("[FeedRunner] Done. Sleeping for 10 minutes.")
         except Exception as e:
             print(f"[FeedRunner] Error: {e}")
-        time.sleep(600)  # 600 seconds = 10 minutes
+        time.sleep(600)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,20 +66,30 @@ async def lifespan(app: FastAPI):
     thread = threading.Thread(target=run_feed_runner_periodically, daemon=True)
     thread.start()
     yield
-    # Any cleanup logic (if needed) goes here
 
-app = FastAPI(
-    title="EvilWatch API",
-    version="0.1",
-    lifespan=lifespan
-)
+# --- Use lifespan for startup logic
+app.router.lifespan_context = lifespan
+
 app.include_router(api.router, prefix="/api")
 app.include_router(neutrino.router, prefix="/neutrino")
 
+# --- Models ---
+class ThreatCheckResponse(BaseModel):
+    match: bool
+    value: str
+    category: Optional[str] = None
+    source: Optional[str] = None
+    severity: Optional[str] = None
+    notes: Optional[str] = None
+
+# --- Helper ---
 def query_threat_db(indicator_type: str, value: str) -> ThreatCheckResponse:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    cur.execute("SELECT category, source, severity, notes FROM threat_indicators WHERE type=? AND value=?", (indicator_type, value))
+    cur.execute(
+        "SELECT category, source, severity, notes FROM threat_indicators WHERE type=? AND value=?",
+        (indicator_type, value)
+    )
     row = cur.fetchone()
     conn.close()
     if row:
@@ -79,6 +97,7 @@ def query_threat_db(indicator_type: str, value: str) -> ThreatCheckResponse:
     else:
         return ThreatCheckResponse(match=False, value=value)
 
+# --- API endpoints ---
 @app.get("/check", response_model=ThreatCheckResponse)
 def check_threat(
     type: str = Query(..., pattern="^(ip|email|domain)$"),
@@ -121,13 +140,16 @@ def search_threats(q: str, limit: int = 50):
 
 @app.get("/stats/entries")
 def get_entry_count():
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    # Count only unique entries by value
-    cur.execute("SELECT COUNT(DISTINCT value) FROM threat_indicators")
-    count = cur.fetchone()[0]
-    conn.close()
-    return {"count": count}
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(DISTINCT value) FROM threat_indicators")
+        count = cur.fetchone()[0]
+        conn.close()
+        return {"count": count}
+    except Exception as e:
+        print("DB ERROR:", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/stats/searches")
 def get_search_count():
@@ -153,12 +175,16 @@ def increment_search():
 
 @app.get("/fallback")
 def fallback_search(value: str):
+    """
+    Single API endpoint for enrichment: DB, GeoIP, Neutrino, IPQualityScore.
+    Call this from your frontend, NOT any 3rd-party API directly!
+    """
     result = query_threat_db("ip", value)
     geo_data = {}
     neutrino_data = {}
 
     if not result.match:
-        # GeoIP
+        # --- GeoIP server-side fetch ---
         try:
             geo_res = requests.get(f"http://ip-api.com/json/{value}")
             if geo_res.ok:
@@ -166,7 +192,7 @@ def fallback_search(value: str):
         except Exception as e:
             print(f"GeoIP error: {e}")
 
-        # Neutrino
+        # --- Neutrino server-side fetch ---
         try:
             r = requests.post(
                 "https://neutrinoapi.net/ip-blocklist",
@@ -178,6 +204,7 @@ def fallback_search(value: str):
         except Exception as e:
             print(f"Neutrino error: {e}")
 
+        # --- IPQualityScore fallback ---
         if not neutrino_data:
             try:
                 ipqs_key = os.getenv("IPQS_KEY", "")
@@ -194,7 +221,7 @@ def fallback_search(value: str):
         "db_match": result.dict(),
         "geo": geo_data,
         "neutrino": neutrino_data,
-        "source_used": neutrino_data.get("source", "none")
+        "source_used": neutrino_data.get("source", "none") if neutrino_data else "none"
     }
 
 @app.get("/stats/type-breakdown")
@@ -204,5 +231,4 @@ def get_type_breakdown():
     cur.execute("SELECT category, COUNT(*) FROM threat_indicators GROUP BY category")
     rows = cur.fetchall()
     conn.close()
-    # Return as a dict {category: count}
     return {row[0]: row[1] for row in rows}
