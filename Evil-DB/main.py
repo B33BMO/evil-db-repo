@@ -173,57 +173,38 @@ def increment_search():
     search_counter += 1
     return {"count": search_counter}
 
-@app.get("/api/fallback")
+@app.get("/fallback")
 def fallback_search(value: str):
-    """
-    Single API endpoint for enrichment: DB, GeoIP, Neutrino, IPQualityScore.
-    Call this from your frontend, NOT any 3rd-party API directly!
-    """
+    print("FALLBACK SEARCH CALLED WITH:", value)
     result = query_threat_db("ip", value)
     geo_data = {}
     neutrino_data = {}
 
     if not result.match:
-        # --- GeoIP server-side fetch ---
+        # GeoIP
         try:
             geo_res = requests.get(f"https://ip-api.com/json/{value}")
             if geo_res.ok:
-                geo_data = geo_res.json()
-                print("GEOIP RAW RESPONSE:", geo_data)
+                geo = geo_res.json()
+                print("GEOIP RAW RESPONSE:", geo)
+                geo_data = {
+                    "ip": geo.get("query", value),
+                    "country": geo.get("country", ""),
+                    "city": geo.get("city", ""),
+                    "isp": geo.get("isp", ""),
+                    "lat": geo.get("lat", None),
+                    "lon": geo.get("lon", None)
+                }
         except Exception as e:
             print(f"GeoIP error: {e}")
-
-        # --- Neutrino server-side fetch ---
-        try:
-            r = requests.post(
-                "https://neutrinoapi.net/ip-blocklist",
-                data={"ip": value},
-                auth=(NEUTRINO_API_USER, NEUTRINO_API_KEY)
-            )
-            if r.ok:
-                neutrino_data = r.json()
-        except Exception as e:
-            print(f"Neutrino error: {e}")
-
-        # --- IPQualityScore fallback ---
-        if not neutrino_data:
-            try:
-                ipqs_key = os.getenv("IPQS_KEY", "")
-                r = requests.get(
-                    f"https://ipqualityscore.com/api/json/ip/{ipqs_key}/{value}"
-                )
-                if r.ok:
-                    neutrino_data = r.json()
-                    neutrino_data["source"] = "ipqualityscore"
-            except Exception as e:
-                print(f"IPQS fallback error: {e}")
 
     return {
         "db_match": result.dict(),
         "geo": geo_data,
         "neutrino": neutrino_data,
-        "source_used": neutrino_data.get("source", "none") if neutrino_data else "none"
+        "source_used": neutrino_data.get("source", "none")
     }
+
 
 @app.get("/stats/type-breakdown")
 def get_type_breakdown():
