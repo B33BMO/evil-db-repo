@@ -366,7 +366,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="mt-16 pt-10 pb-6 text-center border-t border-[#292929] text-[#666] text-sm">
         <span>
-          &copy; {new Date().getFullYear()} Evil-DB &mdash; Made with bad intentions, good code.<br />
+          &copy; {new Date().getFullYear()} Evil-DB &mdash; Made with love and a shit ton of caffeine.<br />
           <span className="text-xs">All trademarks and snarky comments reserved.</span>
         </span>
       </footer>
