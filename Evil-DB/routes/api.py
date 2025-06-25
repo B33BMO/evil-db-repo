@@ -4,7 +4,7 @@ from typing import Optional, List
 import sqlite3
 import os
 import feedparser
-
+import requests
 router = APIRouter()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "..", "db", "threats.db")
@@ -112,3 +112,37 @@ def type_breakdown():
     rows = cur.fetchall()
     conn.close()
     return {row[0]: row[1] for row in rows}
+@router.get("/enrich")
+def enrich_ip(ip: str):
+    # 1. Try to find in DB as type="ip"
+    result = query_threat_db("ip", ip)
+    
+    # 2. GeoIP enrichment
+    geo_data = {}
+    try:
+        geo_res = requests.get(f"http://ip-api.com/json/{ip}")
+        if geo_res.ok:
+            geo_data = geo_res.json()
+    except Exception as e:
+        print(f"GeoIP error: {e}")
+
+    # 3. Neutrino enrichment
+    neutrino_data = {}
+    try:
+        user = os.getenv("NEUTRINO_USER", "")
+        key = os.getenv("NEUTRINO_KEY", "")
+        r = requests.post(
+            "https://neutrinoapi.net/ip-blocklist",
+            data={"ip": ip},
+            auth=(user, key)
+        )
+        if r.ok:
+            neutrino_data = r.json()
+    except Exception as e:
+        print(f"Neutrino error: {e}")
+
+    return {
+        "db": result.dict(),
+        "geo": geo_data,
+        "neutrino": neutrino_data,
+    }
