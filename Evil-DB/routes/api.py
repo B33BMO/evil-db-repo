@@ -190,4 +190,4 @@ def enrich_ip(ip: str):
         "db": result.dict(),
         "geo": geo_data,
         "neutrino": neutrino_data,
-    }
+    } 
