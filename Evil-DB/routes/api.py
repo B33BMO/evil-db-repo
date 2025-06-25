@@ -5,6 +5,8 @@ import sqlite3
 import os
 import feedparser
 import requests
+NEUTRINO_USER = "b33bmo"
+NEUTRINO_KEY = "m8Jm8MF4qhXJqWE8cS6xJVeb9I2dvU46TN3EShO6E800FC9Z"
 router = APIRouter()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "..", "db", "threats.db")
