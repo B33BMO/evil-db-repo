@@ -17,8 +17,8 @@ from fastapi.middleware.cors import CORSMiddleware
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "db", "threats.db")
 
-NEUTRINO_API_USER = os.getenv("NEUTRINO_USER", "")
-NEUTRINO_API_KEY = os.getenv("NEUTRINO_KEY", "")
+NEUTRINO_USER = "b33bmo"
+NEUTRINO_KEY = "m8Jm8MF4qhXJqWE8cS6xJVeb9I2dvU46TN3EShO6E800FC9Z"
 
 app = FastAPI(
     title="EvilWatch API",
