@@ -1,16 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect } from 'react';
-import { FaLock, FaDatabase, FaSearch, FaArrowLeft, FaGlobe } from 'react-icons/fa';
-
-type GeoInfo = {
-  ip: string;
-  country: string;
-  city: string;
-  isp: string;
-  lat?: number;
-  lon?: number;
-} | null;
+import { FaLock, FaDatabase, FaSearch, FaArrowLeft } from 'react-icons/fa';
 
 type ThreatInfo = {
   value: string;
@@ -20,17 +11,8 @@ type ThreatInfo = {
   notes: string;
 } | null;
 
-type NeutrinoInfo = {
-  blocklist?: boolean;
-  reason?: string;
-  country?: string;
-  host?: string;
-} | null;
-
 type CVE = { title: string; link: string; };
 type RawCVE = { title?: string; name?: string; cve_id?: string; link?: string; url?: string };
-
-const isIP = (str: string) => /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(str);
 
 export default function Home() {
   useEffect(() => { fetch("/track", { method: "POST" }); }, []);
@@ -42,19 +24,16 @@ export default function Home() {
   const [cves, setCves] = useState<CVE[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedThreat, setSelectedThreat] = useState<ThreatInfo>(null);
-  const [geoInfo, setGeoInfo] = useState<GeoInfo>(null);
-  const [neutrinoInfo, setNeutrinoInfo] = useState<NeutrinoInfo>(null);
   const [showResult, setShowResult] = useState(false);
 
-  // --- Modern search, using /api/fallback for all enrichment ---
+  // -- Search only the DB --
   const handleSearch = async () => {
     if (!query.trim()) return;
     try {
-      // Explicitly type the data
       const resp = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
       const data: ThreatInfo[] = await resp.json();
       let threat: ThreatInfo = null;
-  
+
       if (Array.isArray(data) && data.length && data[0]?.value) {
         threat = {
           value: data[0].value,
@@ -67,47 +46,14 @@ export default function Home() {
         threat = {
           value: query,
           category: "N/A",
-          source: "Fallback",
+          source: "DB",
           severity: "Unknown",
           notes: "Not found in DB"
         };
       }
       setSelectedThreat(threat);
       setShowResult(true);
-  
-      // Enrichment lookup...
-      if (isIP(threat.value)) {
-        const enrichResp = await fetch(`/api/fallback?value=${encodeURIComponent(threat.value)}`);
-        const enrich = await enrichResp.json();
-  
-        if (enrich.geo && enrich.geo.status !== "fail") {
-          setGeoInfo({
-            ip: enrich.geo.query || threat.value,
-            country: enrich.geo.country || "",
-            city: enrich.geo.city || "",
-            isp: enrich.geo.isp || "",
-            lat: enrich.geo.lat,
-            lon: enrich.geo.lon,
-          });
-        } else {
-          setGeoInfo(null);
-        }
-  
-        if (enrich.neutrino) {
-          setNeutrinoInfo({
-            blocklist: enrich.neutrino.blocklist ?? false,
-            reason: enrich.neutrino.reason || enrich.neutrino.message || "N/A",
-            country: enrich.neutrino.country || "N/A",
-            host: enrich.neutrino.host || "N/A"
-          });
-        } else {
-          setNeutrinoInfo(null);
-        }
-      } else {
-        setGeoInfo(null);
-        setNeutrinoInfo(null);
-      }
-  
+
       await fetch('/api/stats/increment-search', { method: 'POST' });
       setSearchCount((prev) => prev + 1);
     } catch (err) {
@@ -115,19 +61,15 @@ export default function Home() {
       setError("Failed to fetch search results.");
     }
   };
-  
 
   const handleBack = () => {
     setShowResult(false);
     setQuery('');
     setSelectedThreat(null);
-    setGeoInfo(null);
-    setNeutrinoInfo(null);
     setError(null);
   };
 
   useEffect(() => {
-    // Stats, CVEs, etc
     (async () => {
       try {
         const entries = await fetch("/api/stats/entries").then(r => r.json());
@@ -156,30 +98,10 @@ export default function Home() {
     })();
   }, []);
 
-  const MapPanel = ({ geo }: { geo: GeoInfo }) =>
-    geo && geo.country && geo.city && geo.ip && geo.lat && geo.lon ? (
-      <div className="bg-[#222] rounded-xl p-4 shadow-lg h-full flex flex-col justify-between">
-        <div>
-          <h4 className="text-xl font-semibold mb-2 flex items-center text-[#e0e0e0]"><FaGlobe className="mr-2" />Location Map</h4>
-          <p className="text-[#bbbbbb] text-sm mb-2">{geo.city}, {geo.country}</p>
-        </div>
-        <iframe
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${geo.lon-0.1},${geo.lat-0.1},${geo.lon+0.1},${geo.lat+0.1}&layer=mapnik&marker=${geo.lat},${geo.lon}`}
-          className="w-full rounded-xl mt-2"
-          style={{ minHeight: '180px', border: 'none' }}
-          loading="lazy"
-          allowFullScreen
-        />
-      </div>
-    ) : (
-      <div className="bg-[#222] rounded-xl p-4 shadow-lg h-full flex items-center justify-center">
-        <span className="text-[#888]">No Map Data</span>
-      </div>
-    );
-
+  // No geo panel, no Neutrino. Just detection panel.
   const DetectionPanel = ({ threat }: { threat: ThreatInfo }) => (
     <div className="bg-[#2b2b2b] p-6 rounded-xl shadow-lg flex flex-col h-full">
-      <h4 className="text-xl font-bold mb-2 text-red-400">Detections &amp; Reason</h4>
+      <h4 className="text-xl font-bold mb-2 text-red-400">Detection Result</h4>
       <p><strong>Source:</strong> {threat?.source}</p>
       <p><strong>Category:</strong> {threat?.category}</p>
       <p><strong>Severity:</strong> {threat?.severity}</p>
@@ -258,7 +180,7 @@ export default function Home() {
           </div>
         </div>
       ) : (
-        // Search result panel/grid
+        // Show result panel
         <div className="w-full">
           <button
             className="flex items-center mb-4 px-4 py-2 bg-[#333] hover:bg-[#444] rounded-lg shadow text-[#ccc] font-bold"
@@ -266,41 +188,7 @@ export default function Home() {
           >
             <FaArrowLeft className="mr-2" /> New Search
           </button>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-            {/* Left col: GeoIP & Detections */}
-            <div className="flex flex-col gap-6">
-              <div className="bg-[#2b2b2b] p-6 rounded-xl shadow-lg flex-1 mb-2">
-                <h3 className="text-xl font-bold mb-2 text-[#7fd1f7]">GeoIP &amp; IP Info</h3>
-                {geoInfo ? (
-                  <>
-                    <p><strong>IP:</strong> {geoInfo.ip}</p>
-                    <p><strong>Country:</strong> {geoInfo.country}</p>
-                    <p><strong>City:</strong> {geoInfo.city}</p>
-                    <p><strong>ISP:</strong> {geoInfo.isp}</p>
-                  </>
-                ) : (
-                  <p className="text-red-400">No GeoIP info.</p>
-                )}
-              </div>
-              <DetectionPanel threat={selectedThreat} />
-            </div>
-            {/* Middle col: Neutrino API */}
-            <div className="bg-[#2b2b2b] p-6 rounded-xl shadow-lg flex flex-col h-full">
-              <h3 className="text-xl font-bold mb-2 text-[#7fd1f7]">Neutrino API</h3>
-              {neutrinoInfo ? (
-                <>
-                  <p><strong>Blocklisted:</strong> {neutrinoInfo.blocklist ? 'Yes' : 'No'}</p>
-                  <p><strong>Reason:</strong> {neutrinoInfo.reason || 'N/A'}</p>
-                  <p><strong>Country:</strong> {neutrinoInfo.country || 'N/A'}</p>
-                  <p><strong>Host:</strong> {neutrinoInfo.host || 'N/A'}</p>
-                </>
-              ) : (
-                <p className="text-red-400">Can&apos;t load Neutrino info.</p>
-              )}
-            </div>
-            {/* Right col: Map */}
-            <MapPanel geo={geoInfo && geoInfo.lat && geoInfo.lon ? geoInfo : null} />
-          </div>
+          <DetectionPanel threat={selectedThreat} />
         </div>
       )}
 
@@ -311,7 +199,7 @@ export default function Home() {
           <p className="text-[#aaaaaa] text-lg leading-relaxed">
             Evil-DB is an open-source threat intelligence dashboard and indicator search engine.
             Designed for speed, privacy, and a little bit of sass, it lets you quickly check IPs, domains, and emails against a curated database of evil stuff.
-            CVEs, GeoIP enrichment, blocklists, you name it. Built with <span className="font-semibold">Next.js</span>, <span className="font-semibold">Tailwind CSS</span>, and enough caffeine to power a small city.
+            CVEs, blocklists, you name it. Built with <span className="font-semibold">Next.js</span>, <span className="font-semibold">Tailwind CSS</span>, and enough caffeine to power a small city.
           </p>
           <p className="mt-4 text-[#777] text-sm italic">
             Threat data is for informational use only.
