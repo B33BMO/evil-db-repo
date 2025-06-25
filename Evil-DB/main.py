@@ -173,7 +173,7 @@ def increment_search():
     search_counter += 1
     return {"count": search_counter}
 
-@app.get("/fallback")
+@app.get("/api/fallback")
 def fallback_search(value: str):
     print("FALLBACK SEARCH CALLED WITH:", value)
     result = query_threat_db("ip", value)
