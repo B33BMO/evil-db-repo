@@ -1,6 +1,15 @@
 import requests
 import sqlite3
 from datetime import datetime
+import os
+import sys
+print("==== FEED RUNNER DEBUG ====")
+print("cwd:", os.getcwd())
+print("script dir:", os.path.dirname(os.path.abspath(__file__)))
+print("DB_PATH:", os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../db/threats.db")))
+print("user:", os.getuid() if hasattr(os, "getuid") else "windows?")
+print("python:", sys.executable)
+print("===========================")
 
 DB_PATH = "/Users/brandonbischoff/evil-db/evil-db-repo/Evil-DB/db/threats.db"
 
