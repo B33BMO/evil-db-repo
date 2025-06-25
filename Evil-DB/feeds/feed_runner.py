@@ -11,8 +11,8 @@ print("user:", os.getuid() if hasattr(os, "getuid") else "windows?")
 print("python:", sys.executable)
 print("===========================")
 
-DB_PATH = "/Users/brandonbischoff/evil-db/evil-db-repo/Evil-DB/db/threats.db"
-
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "db", "threats.db")
 
 def insert_ip(ip, category, source, severity="high", notes=""):
     conn = sqlite3.connect(DB_PATH)
