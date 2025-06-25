@@ -15,6 +15,7 @@ import subprocess
 app = FastAPI(title="EvilWatch API", version="0.1")
 app.include_router(api.router, prefix="/api")
 app.include_router(neutrino.router, prefix="/neutrino")
+
 @app.on_event("startup")
 def startup_tasks():
     check_db()
@@ -54,6 +55,18 @@ def check_db():
     if not os.path.exists(DB_PATH):
         raise RuntimeError(f"Database not found at {DB_PATH}")
 
+    # Add indexes for performance
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cur = conn.cursor()
+    cur.execute("PRAGMA journal_mode=WAL;")  # Enable faster write mode
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_type_value ON threat_indicators(type, value);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_value ON threat_indicators(value);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_category ON threat_indicators(category);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_source ON threat_indicators(source);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_notes ON threat_indicators(notes);")
+    conn.commit()
+    conn.close()
+
 @app.get("/check", response_model=ThreatCheckResponse)
 def check_threat(
     type: str = Query(..., pattern="^(ip|email|domain)$"),
@@ -75,6 +88,8 @@ def list_threats(limit: int = 100):
 
 @app.get("/search", response_model=List[ThreatCheckResponse])
 def search_threats(q: str, limit: int = 50):
+    import time
+    start = time.time()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     like_query = f"%{q}%"
@@ -86,6 +101,7 @@ def search_threats(q: str, limit: int = 50):
     """, (like_query, like_query, like_query, like_query, limit))
     rows = cur.fetchall()
     conn.close()
+    print(f"[Search] Took {time.time() - start:.3f} sec for query: {q}")
     return [
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
@@ -168,6 +184,7 @@ def fallback_search(value: str):
         "neutrino": neutrino_data,
         "source_used": neutrino_data.get("source", "none")
     }
+
 @app.get("/stats/type-breakdown")
 def get_type_breakdown():
     conn = sqlite3.connect(DB_PATH)
@@ -177,6 +194,7 @@ def get_type_breakdown():
     conn.close()
     # Return as a dict {category: count}
     return {row[0]: row[1] for row in rows}
+
 def run_feed_runner_periodically():
     while True:
         try:

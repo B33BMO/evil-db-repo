@@ -57,7 +57,7 @@ import requests
 import sqlite3
 from datetime import datetime
 
-DB_PATH = "/Users/brandonbischoff/evil-db/Evil-DB/db/threats.db"
+DB_PATH = "/Users/brandonbischoff/evil-db/evil-db-repo/Evil-DB/db/threats.db"
 
 def insert_ip(ip, category, source, severity="high", notes=""):
     conn = sqlite3.connect(DB_PATH)
