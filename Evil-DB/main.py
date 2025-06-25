@@ -186,7 +186,7 @@ def fallback_search(value: str):
     if not result.match:
         # --- GeoIP server-side fetch ---
         try:
-            geo_res = requests.get(f"http://ip-api.com/json/{value}")
+            geo_res = requests.get(f"https://ip-api.com/json/{value}")
             if geo_res.ok:
                 geo_data = geo_res.json()
         except Exception as e:
