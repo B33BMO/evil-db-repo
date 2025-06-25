@@ -40,6 +40,7 @@ type NeutrinoInfo = {
 } | null;
 
 type CVE = { title: string; link: string; };
+type RawCVE = { title?: string; name?: string; cve_id?: string; link?: string; url?: string };
 
 const isIP = (str: string) => /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(str);
 
@@ -62,7 +63,6 @@ export default function Home() {
   const handleSearch = async () => {
     if (!query.trim()) return;
     try {
-      const ipOnly = query.split('/')[0];
       const data = await searchThreat(query);
   
       // Threat: single object or null, ALWAYS with all fields populated
@@ -169,7 +169,7 @@ export default function Home() {
       try {
         const data = await getCVEs();
         setCves(
-          data.items.slice(0, 5).map((item: any) => ({
+          data.items.slice(0, 5).map((item: RawCVE) => ({
             title: item.title || item.name || item.cve_id || "Unknown CVE",
             link: item.link || item.url || "#",
           }))
