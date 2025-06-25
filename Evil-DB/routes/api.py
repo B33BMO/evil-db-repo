@@ -63,6 +63,51 @@ def search_threats(q: str, limit: int = 50):
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
     ]
+@router.get("/fallback")
+def fallback_search(value: str):
+    result = query_threat_db("ip", value)
+    geo_data = {}
+    neutrino_data = {}
+
+    if not result.match:
+        # GeoIP
+        try:
+            geo_res = requests.get(f"http://ip-api.com/json/{value}")
+            if geo_res.ok:
+                geo_data = geo_res.json()
+        except Exception as e:
+            print(f"GeoIP error: {e}")
+
+        # Neutrino
+        try:
+            r = requests.post(
+                "https://neutrinoapi.net/ip-blocklist",
+                data={"ip": value},
+                auth=(os.getenv("NEUTRINO_USER", ""), os.getenv("NEUTRINO_KEY", ""))
+            )
+            if r.ok:
+                neutrino_data = r.json()
+        except Exception as e:
+            print(f"Neutrino error: {e}")
+
+        if not neutrino_data:
+            try:
+                ipqs_key = os.getenv("IPQS_KEY", "")
+                r = requests.get(
+                    f"https://ipqualityscore.com/api/json/ip/{ipqs_key}/{value}"
+                )
+                if r.ok:
+                    neutrino_data = r.json()
+                    neutrino_data["source"] = "ipqualityscore"
+            except Exception as e:
+                print(f"IPQS fallback error: {e}")
+
+    return {
+        "db_match": result.dict(),
+        "geo": geo_data,
+        "neutrino": neutrino_data,
+        "source_used": neutrino_data.get("source", "none")
+    }
 
 @router.get("/stats/entries")
 def get_entry_count():

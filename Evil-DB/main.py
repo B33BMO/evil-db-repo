@@ -173,37 +173,7 @@ def increment_search():
     search_counter += 1
     return {"count": search_counter}
 
-@app.get("/api/fallback")
-def fallback_search(value: str):
-    print("FALLBACK SEARCH CALLED WITH:", value)
-    result = query_threat_db("ip", value)
-    geo_data = {}
-    neutrino_data = {}
 
-    if not result.match:
-        # GeoIP
-        try:
-            geo_res = requests.get(f"https://ip-api.com/json/{value}")
-            if geo_res.ok:
-                geo = geo_res.json()
-                print("GEOIP RAW RESPONSE:", geo)
-                geo_data = {
-                    "ip": geo.get("query", value),
-                    "country": geo.get("country", ""),
-                    "city": geo.get("city", ""),
-                    "isp": geo.get("isp", ""),
-                    "lat": geo.get("lat", None),
-                    "lon": geo.get("lon", None)
-                }
-        except Exception as e:
-            print(f"GeoIP error: {e}")
-
-    return {
-        "db_match": result.dict(),
-        "geo": geo_data,
-        "neutrino": neutrino_data,
-        "source_used": neutrino_data.get("source", "none")
-    }
 
 
 @app.get("/stats/type-breakdown")
