@@ -14,85 +14,132 @@ import {
 } from "@/lib/api";
 import { FaLock, FaDatabase, FaSearch, FaArrowLeft, FaGlobe } from 'react-icons/fa';
 
-const isIP = (str) => /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(str);
+// ----- TYPE DEFINITIONS -----
+type GeoInfo = {
+  ip: string;
+  country: string;
+  city: string;
+  isp: string;
+  lat?: number;
+  lon?: number;
+} | null;
+
+type ThreatInfo = {
+  value: string;
+  category: string;
+  source: string;
+  severity: string;
+  notes: string;
+} | null;
+
+type NeutrinoInfo = {
+  blocklist: boolean;
+  reason: string;
+  country: string;
+  host: string;
+} | null;
+
+type CVE = { title: string; link: string; };
+
+const isIP = (str: string) => /^\d{1,3}(\.\d{1,3}){3}(\/\d{1,2})?$/.test(str);
 
 export default function Home() {
   useEffect(() => {
     fetch("/track", { method: "POST" });
   }, []);
 
-  const [query, setQuery] = useState('');
-  const [entryCount, setEntryCount] = useState(0);
-  const [entryTypes, setEntryTypes] = useState({});
-  const [searchCount, setSearchCount] = useState(0);
-  const [cves, setCves] = useState([]);
-  const [error, setError] = useState(null);
-  const [selectedThreat, setSelectedThreat] = useState(null);
-  const [geoInfo, setGeoInfo] = useState(null);
-  const [neutrinoInfo, setNeutrinoInfo] = useState(null);
-  const [showResult, setShowResult] = useState(false);
+  const [query, setQuery] = useState<string>('');
+  const [entryCount, setEntryCount] = useState<number>(0);
+  const [entryTypes, setEntryTypes] = useState<{ [key: string]: number }>({});
+  const [searchCount, setSearchCount] = useState<number>(0);
+  const [cves, setCves] = useState<CVE[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedThreat, setSelectedThreat] = useState<ThreatInfo>(null);
+  const [geoInfo, setGeoInfo] = useState<GeoInfo>(null);
+  const [neutrinoInfo, setNeutrinoInfo] = useState<NeutrinoInfo>(null);
+  const [showResult, setShowResult] = useState<boolean>(false);
 
   const handleSearch = async () => {
     if (!query.trim()) return;
     try {
       const ipOnly = query.split('/')[0];
-      const [data, , cachedNeutrino] = await Promise.all([
-        searchThreat(query),
-        isIP(query) ? getGeoInfo(ipOnly) : Promise.resolve(null),
-        isIP(query) ? getCachedNeutrinoInfo(ipOnly) : Promise.resolve(null)
-      ]);
-      const safeArray = Array.isArray(data) ? data : data ? [data] : [];
-      if (safeArray.length > 0) {
-        setSelectedThreat(safeArray[0]);
-        setShowResult(true);
-        if (isIP(safeArray[0].value)) {
-          const ipVal = safeArray[0].value.split('/')[0];
-          getGeoInfo(ipVal).then(setGeoInfo).catch(() => setGeoInfo(null));
-          getCachedNeutrinoInfo(ipVal).then((info) => setNeutrinoInfo(info)).catch(() => setNeutrinoInfo(null));
-        } else {
-          setGeoInfo(null);
-          setNeutrinoInfo(null);
+      const data = await searchThreat(query);
+  
+      // Threat: single object or null, ALWAYS with all fields populated
+      let threat: ThreatInfo | null = null;
+      if (Array.isArray(data)) {
+        // Use the first item ONLY if all fields are present and strings
+        if (
+          data.length > 0 &&
+          data[0] &&
+          typeof data[0].value === "string" &&
+          typeof data[0].category === "string" &&
+          typeof data[0].source === "string" &&
+          typeof data[0].severity === "string" &&
+          typeof data[0].notes === "string"
+        ) {
+          threat = data[0];
         }
-      } else {
-        const fallback = {
+      } else if (
+        data &&
+        typeof data.value === "string" &&
+        typeof data.category === "string" &&
+        typeof data.source === "string" &&
+        typeof data.severity === "string" &&
+        typeof data.notes === "string"
+      ) {
+        threat = {
+          value: data.value,
+          category: data.category,
+          source: data.source,
+          severity: data.severity,
+          notes: data.notes
+        };
+      }
+  
+      // If no threat found, always use the fallback object
+      if (!threat) {
+        threat = {
           value: query,
           category: "N/A",
           source: "Fallback",
           severity: "Unknown",
           notes: "Not found in DB"
         };
-        setSelectedThreat(fallback);
-
-        if (isIP(query)) {
-          const ipVal = query.split('/')[0];
-          try {
-            const geo = await getGeoInfo(ipVal);
-            const neut = await getCachedNeutrinoInfo(ipVal);
-            setGeoInfo(geo);
-            setNeutrinoInfo(neut);
-          } catch {
-            setGeoInfo(null);
-            setNeutrinoInfo(null);
-          }
-        } else {
-          setGeoInfo(null);
-          setNeutrinoInfo(null);
-        }
-        setShowResult(true);
       }
-      if (isIP(query) && !cachedNeutrino) {
-        const live = await getNeutrinoInfo(ipOnly);
-        if (live) {
-          await saveNeutrinoInfo(ipOnly, live);
+  
+      setSelectedThreat(threat);
+      setShowResult(true);
+  
+      // Geo/Neutrino logic: only for IPs
+      if (isIP(threat.value)) {
+        const ipVal = threat.value.split('/')[0];
+        getGeoInfo(ipVal)
+          .then((g) => setGeoInfo(g))
+          .catch(() => setGeoInfo(null));
+        getCachedNeutrinoInfo(ipVal)
+          .then((info) => setNeutrinoInfo(info as NeutrinoInfo))
+          .catch(() => setNeutrinoInfo(null));
+  
+        // Always call Neutrino API to refresh cache if you want, or only if not cached
+        const cached = await getCachedNeutrinoInfo(ipVal);
+        if (!cached) {
+          const live = await getNeutrinoInfo(ipVal);
+          if (live) await saveNeutrinoInfo(ipVal, live);
         }
+      } else {
+        setGeoInfo(null);
+        setNeutrinoInfo(null);
       }
+  
       await fetch('/api/stats/increment-search', { method: 'POST' });
-      setSearchCount(prev => prev + 1);
+      setSearchCount((prev) => prev + 1);
     } catch (err) {
       console.error(err);
       setError("Failed to fetch search results.");
     }
   };
+  
 
   const handleBack = () => {
     setShowResult(false);
@@ -122,7 +169,7 @@ export default function Home() {
       try {
         const data = await getCVEs();
         setCves(
-          data.items.slice(0, 5).map(item => ({
+          data.items.slice(0, 5).map((item: any) => ({
             title: item.title || item.name || item.cve_id || "Unknown CVE",
             link: item.link || item.url || "#",
           }))
@@ -136,8 +183,8 @@ export default function Home() {
   }, []);
 
   // 🌎 Map placeholder — replace with a real map if you want
-  const MapPanel = ({ geo }) =>
-    geo && geo.country && geo.city && geo.ip ? (
+  const MapPanel = ({ geo }: { geo: GeoInfo }) =>
+    geo && geo.country && geo.city && geo.ip && geo.lat && geo.lon ? (
       <div className="bg-[#222] rounded-xl p-4 shadow-lg h-full flex flex-col justify-between">
         <div>
           <h4 className="text-xl font-semibold mb-2 flex items-center text-[#e0e0e0]"><FaGlobe className="mr-2" />Location Map</h4>
@@ -158,9 +205,9 @@ export default function Home() {
     );
 
   // 💻 Detection panel
-  const DetectionPanel = ({ threat }) => (
+  const DetectionPanel = ({ threat }: { threat: ThreatInfo }) => (
     <div className="bg-[#2b2b2b] p-6 rounded-xl shadow-lg flex flex-col h-full">
-      <h4 className="text-xl font-bold mb-2 text-red-400">Detections & Reason</h4>
+      <h4 className="text-xl font-bold mb-2 text-red-400">Detections &amp; Reason</h4>
       <p><strong>Source:</strong> {threat?.source}</p>
       <p><strong>Category:</strong> {threat?.category}</p>
       <p><strong>Severity:</strong> {threat?.severity}</p>
@@ -252,7 +299,7 @@ export default function Home() {
             {/* Left col: GeoIP & Detections */}
             <div className="flex flex-col gap-6">
               <div className="bg-[#2b2b2b] p-6 rounded-xl shadow-lg flex-1 mb-2">
-                <h3 className="text-xl font-bold mb-2 text-[#7fd1f7]">GeoIP & IP Info</h3>
+                <h3 className="text-xl font-bold mb-2 text-[#7fd1f7]">GeoIP &amp; IP Info</h3>
                 {geoInfo ? (
                   <>
                     <p><strong>IP:</strong> {geoInfo.ip}</p>
@@ -277,7 +324,7 @@ export default function Home() {
                   <p><strong>Host:</strong> {neutrinoInfo.host || 'N/A'}</p>
                 </>
               ) : (
-                <p className="text-red-400">Can't load Neutrino info.</p>
+                <p className="text-red-400">Can&apos;t load Neutrino info.</p>
               )}
             </div>
             {/* Right col: Map */}
@@ -304,10 +351,10 @@ export default function Home() {
               <li><span className="text-[#7fd1f7]">GET</span> /api/search?q=&lt;value&gt; – Search for threats by IP, domain, or email</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/stats/entries – Total DB entry count</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/stats/type-breakdown – Count by type/category</li>
-              <li><span className="text-[#7fd1f7]">GET</span> /api/stats/searches – Total search count (because who doesn’t love stats?)</li>
+              <li><span className="text-[#7fd1f7]">GET</span> /api/stats/searches – Total search count (because who doesn&rsquo;t love stats?)</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/rss/cves – Latest CVE news (straight from the abyss)</li>
               <li><span className="text-[#7fd1f7]">POST</span> /api/stats/increment-search – Increment search count (every click counts)</li>
-              <li><span className="text-[#7fd1f7]">GET</span> /api/check?type=&lt;ip|domain|email&gt;&value=&lt;value&gt; – Check for an exact indicator match</li>
+              <li><span className="text-[#7fd1f7]">GET</span> /api/check?type=&lt;ip|domain|email&gt;&amp;value=&lt;value&gt; – Check for an exact indicator match</li>
             </ul>
             <p className="text-[#888] mt-2 text-xs">
               For full docs, yell at your nearest developer or just read the damn code. It’s open-source for a reason.
