@@ -50,9 +50,11 @@ export default function Home() {
   const handleSearch = async () => {
     if (!query.trim()) return;
     try {
-      // Step 1: Find threat in DB (search endpoint)
-      let data: any = await fetch(`/api/search?q=${encodeURIComponent(query)}`).then(r => r.json());
+      // Explicitly type the data
+      const resp = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const data: ThreatInfo[] = await resp.json();
       let threat: ThreatInfo = null;
+  
       if (Array.isArray(data) && data.length && data[0]?.value) {
         threat = {
           value: data[0].value,
@@ -62,7 +64,6 @@ export default function Home() {
           notes: data[0].notes
         };
       } else {
-        // fallback: use query as value
         threat = {
           value: query,
           category: "N/A",
@@ -73,13 +74,12 @@ export default function Home() {
       }
       setSelectedThreat(threat);
       setShowResult(true);
-
-      // Step 2: Get enrichment ONLY via your backend (no more browser CORS errors!)
+  
+      // Enrichment lookup...
       if (isIP(threat.value)) {
-        const resp = await fetch(`/api/fallback?value=${encodeURIComponent(threat.value)}`);
-        const enrich = await resp.json();
-
-        // Geo
+        const enrichResp = await fetch(`/api/fallback?value=${encodeURIComponent(threat.value)}`);
+        const enrich = await enrichResp.json();
+  
         if (enrich.geo && enrich.geo.status !== "fail") {
           setGeoInfo({
             ip: enrich.geo.query || threat.value,
@@ -92,8 +92,7 @@ export default function Home() {
         } else {
           setGeoInfo(null);
         }
-
-        // Neutrino/IPQS
+  
         if (enrich.neutrino) {
           setNeutrinoInfo({
             blocklist: enrich.neutrino.blocklist ?? false,
@@ -108,7 +107,7 @@ export default function Home() {
         setGeoInfo(null);
         setNeutrinoInfo(null);
       }
-
+  
       await fetch('/api/stats/increment-search', { method: 'POST' });
       setSearchCount((prev) => prev + 1);
     } catch (err) {
@@ -116,6 +115,7 @@ export default function Home() {
       setError("Failed to fetch search results.");
     }
   };
+  
 
   const handleBack = () => {
     setShowResult(false);
