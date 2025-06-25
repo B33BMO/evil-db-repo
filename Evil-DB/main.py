@@ -189,6 +189,7 @@ def fallback_search(value: str):
             geo_res = requests.get(f"https://ip-api.com/json/{value}")
             if geo_res.ok:
                 geo_data = geo_res.json()
+                print("GEOIP RAW RESPONSE:", geo_data)
         except Exception as e:
             print(f"GeoIP error: {e}")
 
