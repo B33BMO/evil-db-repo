@@ -3,6 +3,7 @@ import sqlite3
 from datetime import datetime
 import os
 import sys
+
 print("==== FEED RUNNER DEBUG ====")
 print("cwd:", os.getcwd())
 print("script dir:", os.path.dirname(os.path.abspath(__file__)))
@@ -14,6 +15,39 @@ print("===========================")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))         # /root/evil-db-repo/Evil-DB/feeds
 PROJECT_ROOT = os.path.dirname(BASE_DIR)                      # /root/evil-db-repo/Evil-DB
 DB_PATH = os.path.join(PROJECT_ROOT, "db", "threats.db")  
+
+def dedupe_and_index():
+    print("🧹 Deduplicating and indexing database...")
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    # Delete duplicates, keeping the first occurrence only
+    cur.execute("""
+    DELETE FROM threat_indicators
+    WHERE rowid NOT IN (
+      SELECT MIN(rowid)
+      FROM threat_indicators
+      GROUP BY type, value, category, source
+    );
+    """)
+    conn.commit()
+
+    # Add unique constraint
+    cur.execute("""
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_threat
+    ON threat_indicators(type, value, category, source);
+    """)
+    conn.commit()
+
+    # Speed up searches (optional but smart)
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_threat_value
+    ON threat_indicators(value);
+    """)
+    conn.commit()
+
+    print("✅ Deduplication and indexing complete.")
+    conn.close()
 
 def insert_ip(ip, category, source, severity="high", notes=""):
     conn = sqlite3.connect(DB_PATH)
@@ -36,7 +70,6 @@ def insert_ip(ip, category, source, severity="high", notes=""):
         print(f"❌ DB error while inserting {ip}: {e}")
     finally:
         conn.close()
-
 
 def get_feed_lines(url):
     try:
@@ -67,6 +100,7 @@ def neutrino_blocklist():
         print(f"✅ Neutrino bulk: {count} IPs imported")
     except Exception as e:
         print(f"❌ Neutrino blocklist download failed: {e}")
+
 def parse_feed_ips(text, split_on=None, col=0):
     for line in text.splitlines():
         if line.startswith("#") or not line.strip():
@@ -78,20 +112,17 @@ def parse_feed_ips(text, split_on=None, col=0):
         else:
             yield line.strip()
 
-
 def abusech():
     print("💀 Abuse.ch Feodo Tracker...")
     url = "https://feodotracker.abuse.ch/downloads/ipblocklist.txt"
     for ip in get_feed_lines(url):
         insert_ip(ip, "malware", "abusech_feodo", "high", "Feodo C2")
 
-
 def emerging_threats():
     print("🚨 Emerging Threats Compromised...")
     url = "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
     for ip in get_feed_lines(url):
         insert_ip(ip, "compromised", "emerging_threats", "high", "Compromised Host")
-
 
 def spamhaus_drop():
     print("🛑 Spamhaus DROP...")
@@ -100,7 +131,6 @@ def spamhaus_drop():
     for ip in parse_feed_ips(text):
         insert_ip(ip.split(";")[0].strip(), "spam", "spamhaus_drop", "high", "Spamhaus DROP")
 
-
 def alienvault_otx():
     print("👽 AlienVault OTX...")
     url = "https://reputation.alienvault.com/reputation.generic"
@@ -108,13 +138,11 @@ def alienvault_otx():
     for ip in parse_feed_ips(text):
         insert_ip(ip.split("#")[0].strip(), "malicious", "alienvault_otx", "medium", "AlienVault OTX bad IP")
 
-
 def cisco_talos():
     print("🦾 Cisco Talos Intelligence...")
     url = "https://talosintelligence.com/documents/ip-blacklist"
     for ip in get_feed_lines(url):
         insert_ip(ip, "malicious", "cisco_talos", "high", "Cisco Talos blacklist")
-
 
 def openphish():
     print("🎣 OpenPhish...")
@@ -122,24 +150,20 @@ def openphish():
     for ip in get_feed_lines(url):
         insert_ip(ip, "phishing", "openphish", "high", "OpenPhish Indicator")
 
-
 def firehol_level1():
     print("🔥 FireHOL...")
     for ip in get_feed_lines("https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"):
         insert_ip(ip, "malicious", "firehol_level1", "high", "Auto-imported")
-
 
 def blocklist_de():
     print("💣 blocklist.de...")
     for ip in get_feed_lines("https://lists.blocklist.de/lists/all.txt"):
         insert_ip(ip, "ssh_brute", "blocklist_de", "medium", "Aggressive brute force")
 
-
 def artillery_banlist():
     print("🛡️  Artillery banlist...")
     for ip in get_feed_lines("https://raw.githubusercontent.com/trustedsec/artillery/master/banlist.txt"):
         insert_ip(ip, "honeypot", "artillery", "medium", "Honeypot caught")
-
 
 def malwaredomainlist():
     print("🦠 MalwareDomainList...")
@@ -149,18 +173,15 @@ def malwaredomainlist():
         if len(parts) >= 2:
             insert_ip(parts[0], "malware", "malwaredomainlist", "medium", "Malware-serving domain")
 
-
 def ciarmy():
     print("🪖 CIArmy...")
     for ip in get_feed_lines("http://cinsscore.com/list/ci-badguys.txt"):
         insert_ip(ip, "scanner", "ciarmy", "medium", "Suspicious scanning IP")
 
-
 def tor_exit_nodes():
     print("🧅 Tor Exit Nodes...")
     for ip in get_feed_lines("https://check.torproject.org/torbulkexitlist"):
         insert_ip(ip, "tor", "tor_exit", "low", "Tor exit node")
-
 
 def blocklistpro():
     print("🧨 Blocklist Pro Threat Feed...")
@@ -168,13 +189,11 @@ def blocklistpro():
     for ip in get_feed_lines(url):
         insert_ip(ip, "malicious", "blocklistpro", "high", "BlocklistPro bad IP")
 
-
 def sans_dshield():
     print("⚔️ SANS DShield Suspicious IPs...")
     url = "https://www.dshield.org/ipsascii.html?limit=10000"
     for ip in get_feed_lines(url):
         insert_ip(ip, "suspicious", "sans_dshield", "medium", "DShield Suspicious IP")
-
 
 def abusech_sslbl():
     print("🔒 Abuse.ch SSL Blacklist...")
@@ -182,13 +201,11 @@ def abusech_sslbl():
     for ip in get_feed_lines(url):
         insert_ip(ip, "malicious", "abusech_sslbl", "high", "SSL Blacklist")
 
-
 def cybercrime_tracker():
     print("💀 CyberCrime Tracker...")
     url = "https://cybercrime-tracker.net/all.php"
     for ip in get_feed_lines(url):
         insert_ip(ip, "malicious", "cybercrime_tracker", "high", "Cybercrime Tracker bad IP")
-
 
 def urlhaus():
     print("🦠 Abuse.ch URLHaus Payloads...")
@@ -196,8 +213,8 @@ def urlhaus():
     for ip in get_feed_lines(url):
         insert_ip(ip, "malicious", "abusech_urlhaus", "high", "URLHaus bad IP")
 
-
 def run_all_feeds():
+    dedupe_and_index()  # <--- Clean the DB every time before feed import!
     print("Downloading Neutrino Data")
     neutrino_blocklist()
     print("🚀 Starting EvilWatch Feed Importer")
@@ -219,10 +236,7 @@ def run_all_feeds():
     cybercrime_tracker()
     urlhaus()
     print("✅ Done.")
-
-
-
+    dedupe_and_index()  # <--- (Optional) Clean up again after import
 
 if __name__ == "__main__":
     run_all_feeds()
-
