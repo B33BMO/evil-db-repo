@@ -123,20 +123,45 @@ def search_threats(q: str, limit: int = 50):
     start = _time.time()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-    like_query = f"%{q}%"
+
+    # -- 1. Exact match (fast, indexed)
     cur.execute("""
         SELECT value, category, source, severity, notes
         FROM threat_indicators
-        WHERE value LIKE ? OR category LIKE ? OR source LIKE ? OR notes LIKE ?
+        WHERE value = ?
         LIMIT ?
-    """, (like_query, like_query, like_query, like_query, limit))
+    """, (q, limit))
     rows = cur.fetchall()
+
+    # -- 2. Starts-with match (still uses index)
+    if not rows:
+        cur.execute("""
+            SELECT value, category, source, severity, notes
+            FROM threat_indicators
+            WHERE value LIKE ?
+            LIMIT ?
+        """, (f"{q}%", limit))
+        rows = cur.fetchall()
+
+    # -- 3. Contains (fuzzy, SLOW, last resort)
+    if not rows:
+        cur.execute("""
+            SELECT value, category, source, severity, notes
+            FROM threat_indicators
+            WHERE value LIKE ?
+            LIMIT ?
+        """, (f"%{q}%", limit))
+        rows = cur.fetchall()
+
+    # Optionally, you can expand to search category/source/notes ONLY on deep search, not always
+
     conn.close()
-    print(f"[Search] Took {_time.time() - start:.3f} sec for query: {q}")
+    print(f"[Search] Took {_time.time() - start:.3f} sec for query: {q} [{len(rows)} results]")
     return [
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
     ]
+
 
 @app.get("/stats/entries")
 def get_entry_count():
