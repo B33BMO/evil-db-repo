@@ -57,13 +57,13 @@ def fts_search(q: str, limit: int = 50):
     start = _time.time()
     conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     cur = conn.cursor()
-    # Escape single quotes for safety
-    search = q.replace("'", "''")
-    # DO NOT prefix MATCH with table name!
+    # Escape quotes and wrap the query in double quotes
+    search = q.replace('"', '""')  # escape inner double quotes
+    match_str = f'"{search}"'
     cur.execute(f"""
         SELECT value, category, source, severity, notes
         FROM threat_indicators_fts
-        WHERE MATCH '{search}'
+        WHERE MATCH {repr(match_str)}
         LIMIT {int(limit)}
     """)
     rows = cur.fetchall()
