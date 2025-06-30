@@ -51,7 +51,6 @@ def list_threats(limit: int = 100):
 
 
 
-# 🔥 FTS5 SEARCH ENDPOINT — THIS IS THE FAST ONE
 @router.get("/fts_search", response_model=List[ThreatCheckResponse])
 def fts_search(q: str, limit: int = 50):
     import time as _time
@@ -59,12 +58,11 @@ def fts_search(q: str, limit: int = 50):
     conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     cur = conn.cursor()
     cur.execute("""
-    SELECT value, category, source, severity, notes
-    FROM threat_indicators_fts
-    WHERE threat_indicators_fts MATCH ?
-    LIMIT ?
-""", (q, limit))
-
+        SELECT value, category, source, severity, notes
+        FROM threat_indicators_fts
+        WHERE threat_indicators_fts MATCH ?
+        LIMIT ?
+    """, (q, limit))
     rows = cur.fetchall()
     conn.close()
     print(f"[FTS Search] Took {_time.time() - start:.3f} sec for query: {q} [{len(rows)} results]")
@@ -72,6 +70,7 @@ def fts_search(q: str, limit: int = 50):
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
     ]
+
 
 @router.get("/fallback")
 def fallback_search(value: str):
