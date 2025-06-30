@@ -2,7 +2,7 @@
 import Image from "next/image";
 import { useState, useEffect } from 'react';
 import {
-  FaLock, FaDatabase, FaSearch, FaArrowLeft, FaGlobe, FaShieldAlt
+  FaLock, FaDatabase, FaSearch, FaGlobe, FaShieldAlt
 } from 'react-icons/fa';
 import { FaTimes } from 'react-icons/fa';
 
