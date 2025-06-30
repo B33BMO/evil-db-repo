@@ -1,7 +1,9 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect } from 'react';
-import { FaLock, FaDatabase, FaSearch, FaArrowLeft, FaGlobe, FaShieldAlt } from 'react-icons/fa';
+import {
+  FaLock, FaDatabase, FaSearch, FaArrowLeft, FaGlobe, FaShieldAlt
+} from 'react-icons/fa';
 
 type GeoInfo = {
   ip: string;
@@ -74,8 +76,8 @@ export default function Home() {
       setShowResult(true);
 
       const indicatorValue = threat.value?.split(",")[0]?.trim() || threat.value;
-if (isIP(indicatorValue)) {
-  const enrichResp = await fetch(`/api/fallback?value=${encodeURIComponent(indicatorValue)}`);
+      if (isIP(indicatorValue)) {
+        const enrichResp = await fetch(`/api/fallback?value=${encodeURIComponent(indicatorValue)}`);
         const enrich = await enrichResp.json();
 
         if (enrich.geo && enrich.geo.status !== "fail") {
@@ -152,10 +154,10 @@ if (isIP(indicatorValue)) {
     })();
   }, []);
 
-  // Modal Overlay - Clean, glassy, non-terminal, with two panels
+  // Modal Overlay - No bottom sticky, just one slick panel
   const ResultModal = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="relative w-full max-w-4xl mx-auto rounded-2xl bg-[#181a20] shadow-2xl flex flex-col md:flex-row overflow-hidden border border-[#27292f]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+      <div className="relative w-full max-w-4xl mx-auto rounded-2xl bg-[#191a1f] shadow-2xl flex flex-col md:flex-row overflow-hidden border border-[#23232b]">
         {/* Close Button */}
         <button
           className="absolute top-4 left-4 text-gray-400 hover:text-red-400 bg-[#23262b] p-2 rounded-full z-10 transition"
@@ -165,7 +167,7 @@ if (isIP(indicatorValue)) {
           <FaArrowLeft className="w-5 h-5" />
         </button>
         {/* Info Panel */}
-        <div className="flex-1 min-w-[270px] p-8 flex flex-col gap-4 bg-gradient-to-b from-[#20242a]/70 to-[#181a20]/95">
+        <div className="flex-1 min-w-[270px] p-8 flex flex-col gap-4 bg-gradient-to-b from-[#23272f]/70 to-[#181a20]/95">
           <h2 className="text-2xl font-bold text-[#7fd1f7] mb-2 flex items-center gap-2">
             <FaShieldAlt /> Indicator Details
           </h2>
@@ -188,10 +190,20 @@ if (isIP(indicatorValue)) {
             <dd>{geoInfo?.isp || "Unknown"}</dd>
             <dt className="font-semibold text-[#a3e635]">Coordinates</dt>
             <dd>{geoInfo && geoInfo.lat && geoInfo.lon ? `${geoInfo.lat}, ${geoInfo.lon}` : "Unknown"}</dd>
+            <dt className="font-semibold text-[#a3e635]">Blocklisted</dt>
+            <dd className={neutrinoInfo?.blocklist ? "text-red-400" : "text-green-400"}>
+              {neutrinoInfo?.blocklist ? "Yes" : "No"}
+            </dd>
+            <dt className="font-semibold text-[#a3e635]">Blocklist Reason</dt>
+            <dd>{neutrinoInfo?.reason || "N/A"}</dd>
+            <dt className="font-semibold text-[#a3e635]">Blocklist Country</dt>
+            <dd>{neutrinoInfo?.country || "N/A"}</dd>
+            <dt className="font-semibold text-[#a3e635]">Blocklist Host</dt>
+            <dd>{neutrinoInfo?.host || "N/A"}</dd>
           </dl>
         </div>
         {/* Map Panel */}
-        <div className="flex-1 min-w-[300px] bg-[#23272f] p-8 flex flex-col items-center justify-center border-l border-[#323232]">
+        <div className="flex-1 min-w-[300px] bg-[#21232b] p-8 flex flex-col items-center justify-center border-l border-[#282832]">
           <h4 className="text-lg font-semibold mb-2 text-[#7fd1f7] flex items-center">
             <FaGlobe className="mr-2" /> Location Map
           </h4>
@@ -209,31 +221,11 @@ if (isIP(indicatorValue)) {
           )}
         </div>
       </div>
-
-      {/* Blacklist/Neutrino info bar (sticky at bottom of modal) */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95vw] max-w-2xl">
-        <div className="flex items-center gap-6 bg-[#202126] shadow-xl border border-[#323232] rounded-xl px-6 py-4 justify-between backdrop-blur-md">
-          <div className="flex-1 text-lg font-bold text-[#7fd1f7] flex items-center gap-2">
-            <FaShieldAlt /> Blacklist / Neutrino Status
-          </div>
-          <div className="flex-1 flex flex-col gap-1 font-mono text-sm">
-            <div>
-              <span className="font-semibold">Blocklisted:</span>{" "}
-              <span className={neutrinoInfo?.blocklist ? "text-red-400" : "text-green-400"}>
-                {neutrinoInfo?.blocklist ? "Yes" : "No"}
-              </span>
-            </div>
-            <div><span className="font-semibold">Reason:</span> {neutrinoInfo?.reason || "N/A"}</div>
-            <div><span className="font-semibold">Country:</span> {neutrinoInfo?.country || "N/A"}</div>
-            <div><span className="font-semibold">Host:</span> {neutrinoInfo?.host || "N/A"}</div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-[#1e1e1e] text-[#e0e0e0] p-6 font-sans">
+    <div className="min-h-screen bg-[#181a1f] text-[#e0e0e0] p-6 font-sans">
       <header className="flex items-center mb-8">
         <Image src="/logo.png" alt="Evil-DB Logo" width={48} height={48} className="h-12 mr-4 rounded-xl shadow-md" />
         <h1 className="text-4xl font-extrabold tracking-tight">Evil-DB</h1>
@@ -257,7 +249,7 @@ if (isIP(indicatorValue)) {
       <div className="max-w-2xl mx-auto mb-10">
         <input
           type="text"
-          className="w-full p-4 rounded-xl bg-[#333333] border border-[#3d3d3d] focus:outline-none focus:ring-2 focus:ring-[#555] mb-4 shadow-sm"
+          className="w-full p-4 rounded-xl bg-[#222325] border border-[#32333a] focus:outline-none focus:ring-2 focus:ring-[#444] mb-4 shadow-sm"
           placeholder="Search IP, domain, or email..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -270,7 +262,7 @@ if (isIP(indicatorValue)) {
       {/* Main stats page */}
       {!showResult ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-[#2b2b2b] p-5 rounded-xl shadow-md">
+          <div className="bg-[#23232b] p-5 rounded-xl shadow-md">
             <h2 className="text-xl font-bold mb-3"><FaLock className="inline mr-2 align-text-bottom text-[#7fd1f7]" />Recent CVEs</h2>
             <ul className="list-disc list-inside text-sm space-y-4">
               {cves.map((cve, i) => (
@@ -287,7 +279,7 @@ if (isIP(indicatorValue)) {
               ))}
             </ul>
           </div>
-          <div className="bg-[#2b2b2b] p-5 rounded-xl shadow-md text-center">
+          <div className="bg-[#23232b] p-5 rounded-xl shadow-md text-center">
             <h2 className="text-xl font-bold mb-2"><FaDatabase className="inline mr-2 align-text-bottom text-[#7fd1f7]" />DB Entries</h2>
             <p className="text-4xl font-mono text-green-400">{entryCount}</p>
             <div className="mt-4 space-y-1 text-sm text-[#cccccc] text-left">
@@ -297,13 +289,13 @@ if (isIP(indicatorValue)) {
               ))}
             </div>
           </div>
-          <div className="bg-[#2b2b2b] p-5 rounded-xl shadow-md text-center">
+          <div className="bg-[#23232b] p-5 rounded-xl shadow-md text-center">
             <h2 className="text-xl font-bold mb-2"><FaSearch className="inline mr-2 align-text-bottom text-[#7fd1f7]" />Total Searches</h2>
             <p className="text-4xl font-mono text-yellow-400">{searchCount}</p>
           </div>
         </div>
       ) : (
-        // Modal overlay (nice, no terminal style)
+        // Modal overlay (clean, no sticky bottom)
         <ResultModal />
       )}
 
@@ -338,7 +330,7 @@ if (isIP(indicatorValue)) {
       )}
 
       {/* Footer */}
-      <footer className="mt-16 pt-10 pb-6 text-center border-t border-[#292929] text-[#666] text-sm">
+      <footer className="mt-16 pt-10 pb-6 text-center border-t border-[#222226] text-[#666] text-sm">
         <span>
           &copy; {new Date().getFullYear()} Evil-DB &mdash; Made with love and a shit ton of caffeine.<br />
           <span className="text-xs">All trademarks and snarky comments reserved.</span>
