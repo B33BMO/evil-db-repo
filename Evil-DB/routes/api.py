@@ -52,19 +52,42 @@ def search_threats(q: str, limit: int = 50):
     conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
     cur = conn.cursor()
-    like_query = f"%{q}%"
+
+    # 1. Exact match
     cur.execute("""
         SELECT value, category, source, severity, notes
         FROM threat_indicators
-        WHERE value LIKE ? OR category LIKE ? OR source LIKE ? OR notes LIKE ?
+        WHERE value = ?
         LIMIT ?
-    """, (like_query, like_query, like_query, like_query, limit))
+    """, (q, limit))
     rows = cur.fetchall()
+
+    # 2. Starts-with match
+    if not rows:
+        cur.execute("""
+            SELECT value, category, source, severity, notes
+            FROM threat_indicators
+            WHERE value LIKE ?
+            LIMIT ?
+        """, (f"{q}%", limit))
+        rows = cur.fetchall()
+
+    # 3. Contains (fuzzy, SLOW, only if absolutely nothing found above)
+    if not rows:
+        cur.execute("""
+            SELECT value, category, source, severity, notes
+            FROM threat_indicators
+            WHERE value LIKE ?
+            LIMIT ?
+        """, (f"%{q}%", limit))
+        rows = cur.fetchall()
+
     conn.close()
     return [
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
     ]
+
 @router.get("/fallback")
 def fallback_search(value: str):
     result = query_threat_db("ip", value)
