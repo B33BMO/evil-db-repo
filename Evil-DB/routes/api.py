@@ -5,6 +5,7 @@ import sqlite3
 import os
 import feedparser
 import requests
+
 NEUTRINO_USER = "b33bmo"
 NEUTRINO_KEY = "m8Jm8MF4qhXJqWE8cS6xJVeb9I2dvU46TN3EShO6E800FC9Z"
 router = APIRouter()
@@ -52,37 +53,36 @@ def search_threats(q: str, limit: int = 50):
     conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     conn.execute("PRAGMA journal_mode=WAL;")
     cur = conn.cursor()
-
-    # 1. Exact match
+    like_query = f"%{q}%"
     cur.execute("""
         SELECT value, category, source, severity, notes
         FROM threat_indicators
-        WHERE value = ?
+        WHERE value LIKE ? OR category LIKE ? OR source LIKE ? OR notes LIKE ?
+        LIMIT ?
+    """, (like_query, like_query, like_query, like_query, limit))
+    rows = cur.fetchall()
+    conn.close()
+    return [
+        ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
+        for row in rows
+    ]
+
+# 🔥 FTS5 SEARCH ENDPOINT — THIS IS THE FAST ONE
+@router.get("/fts_search", response_model=List[ThreatCheckResponse])
+def fts_search(q: str, limit: int = 50):
+    import time as _time
+    start = _time.time()
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT value, category, source, severity, notes
+        FROM threat_indicators_fts
+        WHERE threat_indicators_fts MATCH ?
         LIMIT ?
     """, (q, limit))
     rows = cur.fetchall()
-
-    # 2. Starts-with match
-    if not rows:
-        cur.execute("""
-            SELECT value, category, source, severity, notes
-            FROM threat_indicators
-            WHERE value LIKE ?
-            LIMIT ?
-        """, (f"{q}%", limit))
-        rows = cur.fetchall()
-
-    # 3. Contains (fuzzy, SLOW, only if absolutely nothing found above)
-    if not rows:
-        cur.execute("""
-            SELECT value, category, source, severity, notes
-            FROM threat_indicators
-            WHERE value LIKE ?
-            LIMIT ?
-        """, (f"%{q}%", limit))
-        rows = cur.fetchall()
-
     conn.close()
+    print(f"[FTS Search] Took {_time.time() - start:.3f} sec for query: {q} [{len(rows)} results]")
     return [
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
@@ -182,6 +182,7 @@ def type_breakdown():
     rows = cur.fetchall()
     conn.close()
     return {row[0]: row[1] for row in rows}
+
 @router.get("/enrich")
 def enrich_ip(ip: str):
     # 1. Try to find in DB as type="ip"
@@ -195,32 +196,10 @@ def enrich_ip(ip: str):
             geo_data = geo_res.json()
     except Exception as e:
         print(f"GeoIP error: {e}")
-        
-@router.get("/fts_search", response_model=List[ThreatCheckResponse])
-def fts_search(q: str, limit: int = 50):
-    import time as _time
-    start = _time.time()
-    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT value, category, source, severity, notes
-        FROM threat_indicators_fts
-        WHERE threat_indicators_fts MATCH ?
-        LIMIT ?
-    """, (q, limit))
-    rows = cur.fetchall()
-    conn.close()
-    print(f"[FTS Search] Took {_time.time() - start:.3f} sec for query: {q} [{len(rows)} results]")
-    return [
-        ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
-        for row in rows
-    ]
 
     # 3. Neutrino enrichment
     neutrino_data = {}
     try:
-        user = os.getenv("NEUTRINO_USER", "")
-        key = os.getenv("NEUTRINO_KEY", "")
         r = requests.post(
             "https://neutrinoapi.net/ip-blocklist",
             data={"ip": ip},
@@ -235,4 +214,4 @@ def fts_search(q: str, limit: int = 50):
         "db": result.dict(),
         "geo": geo_data,
         "neutrino": neutrino_data,
-    } 
+    }
