@@ -116,7 +116,6 @@ export default function Home() {
     }
   };
   
-
   const handleBack = () => {
     setShowResult(false);
     setQuery('');
@@ -156,34 +155,86 @@ export default function Home() {
     })();
   }, []);
 
-  const MapPanel = ({ geo }: { geo: GeoInfo }) =>
-    geo && geo.country && geo.city && geo.ip && geo.lat && geo.lon ? (
-      <div className="bg-[#222] rounded-xl p-4 shadow-lg h-full flex flex-col justify-between">
-        <div>
-          <h4 className="text-xl font-semibold mb-2 flex items-center text-[#e0e0e0]"><FaGlobe className="mr-2" />Location Map</h4>
-          <p className="text-[#bbbbbb] text-sm mb-2">{geo.city}, {geo.country}</p>
-        </div>
-        <iframe
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${geo.lon-0.1},${geo.lat-0.1},${geo.lon+0.1},${geo.lat+0.1}&layer=mapnik&marker=${geo.lat},${geo.lon}`}
-          className="w-full rounded-xl mt-2"
-          style={{ minHeight: '180px', border: 'none' }}
-          loading="lazy"
-          allowFullScreen
-        />
-      </div>
-    ) : (
-      <div className="bg-[#222] rounded-xl p-4 shadow-lg h-full flex items-center justify-center">
-        <span className="text-[#888]">No Map Data</span>
-      </div>
-    );
+  // MODAL OVERLAY!
+  const ResultModal = () => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm transition-all">
+      <div className="relative w-full max-w-4xl mx-auto rounded-2xl bg-[#181a20] shadow-2xl flex flex-col md:flex-row overflow-hidden border-2 border-[#323232]">
+        {/* Close Button */}
+        <button
+          className="absolute top-4 right-4 text-gray-400 hover:text-red-400 bg-[#23262b] p-2 rounded-full z-10 transition"
+          onClick={handleBack}
+          title="Close"
+        >
+          <FaArrowLeft className="w-5 h-5" />
+        </button>
 
-  const DetectionPanel = ({ threat }: { threat: ThreatInfo }) => (
-    <div className="bg-[#2b2b2b] p-6 rounded-xl shadow-lg flex flex-col h-full">
-      <h4 className="text-xl font-bold mb-2 text-red-400">Detections &amp; Reason</h4>
-      <p><strong>Source:</strong> {threat?.source}</p>
-      <p><strong>Category:</strong> {threat?.category}</p>
-      <p><strong>Severity:</strong> {threat?.severity}</p>
-      <p><strong>Notes:</strong> {threat?.notes}</p>
+        {/* Left: Info */}
+        <div className="flex-1 p-8 flex flex-col gap-4 min-w-[280px] bg-gradient-to-b from-[#22242a] to-[#181a20]">
+          <div className="font-mono text-green-300 text-lg tracking-tight border-b border-[#323232] pb-2 mb-2">
+            <span className="block text-xl font-bold text-[#7fd1f7] mb-2">IP Information:</span>
+            <div className="whitespace-pre leading-tight">
+{`--------------------------------------
+ IP Address   : ${geoInfo?.ip || selectedThreat?.value || "Unknown"}
+ Location     : ${geoInfo?.city || "Unknown"}, ${geoInfo?.country || "Unknown"}
+ ISP          : ${geoInfo?.isp || "Unknown"}
+ ASN          : Unknown
+ Timezone     : Unknown
+ Coordinates  : ${
+    geoInfo && geoInfo.lat && geoInfo.lon
+      ? `${geoInfo.lat}, ${geoInfo.lon}`
+      : "Unknown"
+  }
+--------------------------------------`}
+            </div>
+          </div>
+          <div className="mt-4">
+            <span className="text-lg font-bold text-[#f87171]">Detection/Reason:</span>
+            <div className="font-mono text-[#d1d5db] mt-2 text-sm bg-[#23272f] rounded-lg p-3">
+              <div><span className="font-semibold">Source:</span> {selectedThreat?.source}</div>
+              <div><span className="font-semibold">Category:</span> {selectedThreat?.category}</div>
+              <div><span className="font-semibold">Severity:</span> {selectedThreat?.severity}</div>
+              <div><span className="font-semibold">Notes:</span> {selectedThreat?.notes}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: Map */}
+        <div className="flex-1 min-w-[300px] bg-[#23272f] p-6 flex flex-col items-center justify-center border-l border-[#323232]">
+          <h4 className="text-lg font-semibold mb-2 text-[#7fd1f7] flex items-center">
+            <FaGlobe className="mr-2" /> Location Map
+          </h4>
+          {geoInfo && geoInfo.lat && geoInfo.lon ? (
+            <iframe
+              src={`https://www.openstreetmap.org/export/embed.html?bbox=${geoInfo.lon-0.1},${geoInfo.lat-0.1},${geoInfo.lon+0.1},${geoInfo.lat+0.1}&layer=mapnik&marker=${geoInfo.lat},${geoInfo.lon}`}
+              className="w-full rounded-xl shadow-xl border border-[#323232] min-h-[200px] max-h-[320px] transition-all"
+              loading="lazy"
+              allowFullScreen
+            />
+          ) : (
+            <div className="flex items-center justify-center w-full h-[220px] text-gray-500 text-lg bg-[#23262b] rounded-xl">
+              No Map Data
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Blacklist/Neutrino info bar (sticky at bottom of modal) */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95vw] max-w-2xl">
+        <div className="flex items-center gap-6 bg-[#202126] shadow-xl border border-[#323232] rounded-xl px-6 py-4 justify-between">
+          <div className="flex-1 text-lg font-bold text-[#7fd1f7]">Blacklist / Neutrino Status</div>
+          <div className="flex-1 flex flex-col gap-1 font-mono text-sm">
+            <div>
+              <span className="font-semibold">Blocklisted:</span>{" "}
+              <span className={neutrinoInfo?.blocklist ? "text-red-400" : "text-green-400"}>
+                {neutrinoInfo?.blocklist ? "Yes" : "No"}
+              </span>
+            </div>
+            <div><span className="font-semibold">Reason:</span> {neutrinoInfo?.reason || "N/A"}</div>
+            <div><span className="font-semibold">Country:</span> {neutrinoInfo?.country || "N/A"}</div>
+            <div><span className="font-semibold">Host:</span> {neutrinoInfo?.host || "N/A"}</div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -258,50 +309,8 @@ export default function Home() {
           </div>
         </div>
       ) : (
-        // Search result panel/grid
-        <div className="w-full">
-          <button
-            className="flex items-center mb-4 px-4 py-2 bg-[#333] hover:bg-[#444] rounded-lg shadow text-[#ccc] font-bold"
-            onClick={handleBack}
-          >
-            <FaArrowLeft className="mr-2" /> New Search
-          </button>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
-            {/* Left col: GeoIP & Detections */}
-            <div className="flex flex-col gap-6">
-              <div className="bg-[#2b2b2b] p-6 rounded-xl shadow-lg flex-1 mb-2">
-                <h3 className="text-xl font-bold mb-2 text-[#7fd1f7]">GeoIP &amp; IP Info</h3>
-                {geoInfo ? (
-                  <>
-                    <p><strong>IP:</strong> {geoInfo.ip}</p>
-                    <p><strong>Country:</strong> {geoInfo.country}</p>
-                    <p><strong>City:</strong> {geoInfo.city}</p>
-                    <p><strong>ISP:</strong> {geoInfo.isp}</p>
-                  </>
-                ) : (
-                  <p className="text-red-400">No GeoIP info.</p>
-                )}
-              </div>
-              <DetectionPanel threat={selectedThreat} />
-            </div>
-            {/* Middle col: Neutrino API */}
-            <div className="bg-[#2b2b2b] p-6 rounded-xl shadow-lg flex flex-col h-full">
-              <h3 className="text-xl font-bold mb-2 text-[#7fd1f7]">Neutrino API</h3>
-              {neutrinoInfo ? (
-                <>
-                  <p><strong>Blocklisted:</strong> {neutrinoInfo.blocklist ? 'Yes' : 'No'}</p>
-                  <p><strong>Reason:</strong> {neutrinoInfo.reason || 'N/A'}</p>
-                  <p><strong>Country:</strong> {neutrinoInfo.country || 'N/A'}</p>
-                  <p><strong>Host:</strong> {neutrinoInfo.host || 'N/A'}</p>
-                </>
-              ) : (
-                <p className="text-red-400">Can&apos;t load Neutrino info.</p>
-              )}
-            </div>
-            {/* Right col: Map */}
-            <MapPanel geo={geoInfo && geoInfo.lat && geoInfo.lon ? geoInfo : null} />
-          </div>
-        </div>
+        // Show modal overlay instead of results grid
+        <ResultModal />
       )}
 
       {/* About Section */}
