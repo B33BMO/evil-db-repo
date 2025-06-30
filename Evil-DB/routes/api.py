@@ -57,15 +57,17 @@ def fts_search(q: str, limit: int = 50):
     start = _time.time()
     conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     cur = conn.cursor()
-    # Escape quotes and wrap the query in double quotes
+    # Properly wrap the query for FTS5
     search = q.replace('"', '""')  # escape inner double quotes
-    match_str = f'"{search}"'
-    cur.execute(f"""
+    # This is a plain Python string, NOT an f-string!
+    sql = """
         SELECT value, category, source, severity, notes
         FROM threat_indicators_fts
-        WHERE MATCH {repr(match_str)}
-        LIMIT {int(limit)}
-    """)
+        WHERE MATCH ?
+        LIMIT ?
+    """
+    # The parameter here *must* be the exact quoted string (e.g. '"192.168.1.1"')
+    cur.execute(sql, (f'"{search}"', int(limit)))
     rows = cur.fetchall()
     conn.close()
     print(f"[FTS Search] Took {_time.time() - start:.3f} sec for query: {q} [{len(rows)} results]")
@@ -73,6 +75,7 @@ def fts_search(q: str, limit: int = 50):
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
     ]
+
 
 
 
