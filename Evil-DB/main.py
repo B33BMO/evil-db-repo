@@ -11,7 +11,6 @@ import time
 import subprocess
 from contextlib import asynccontextmanager
 
-# --- FastAPI app with CORS (edit for production) ---
 from fastapi.middleware.cors import CORSMiddleware
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -25,23 +24,42 @@ app = FastAPI(
     version="0.1"
 )
 
-# Allow ALL origins (dev); restrict for production!
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # TODO: Set this to ["https://evil-db.io"] in prod!
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# --- Threaded feed updater ---
-def check_db():
-    if not os.path.exists(DB_PATH):
-        raise RuntimeError(f"Database not found at {DB_PATH}")
+# --- Models ---
+class ThreatCheckResponse(BaseModel):
+    match: bool
+    value: str
+    category: Optional[str] = None
+    source: Optional[str] = None
+    severity: Optional[str] = None
+    notes: Optional[str] = None
 
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+# --- FTS5 Migration & Sync ---
+def migrate_and_sync_fts():
+    conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+    # Enable WAL for better concurrency
     cur.execute("PRAGMA journal_mode=WAL;")
+    # Create FTS5 table if it doesn't exist
+    cur.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS threat_indicators_fts USING fts5(
+            value, category, source, severity, notes, content='threat_indicators', content_rowid='rowid'
+        )
+    """)
+    # Sync: Insert new rows not already in FTS
+    cur.execute("""
+        INSERT INTO threat_indicators_fts (rowid, value, category, source, severity, notes)
+        SELECT rowid, value, category, source, severity, notes FROM threat_indicators
+        WHERE rowid NOT IN (SELECT rowid FROM threat_indicators_fts)
+    """)
+    # Regular indexes for other fast queries (leave these!)
     cur.execute("CREATE INDEX IF NOT EXISTS idx_type_value ON threat_indicators(type, value);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_value ON threat_indicators(value);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_category ON threat_indicators(category);")
@@ -50,12 +68,19 @@ def check_db():
     conn.commit()
     conn.close()
 
+def check_db():
+    if not os.path.exists(DB_PATH):
+        raise RuntimeError(f"Database not found at {DB_PATH}")
+    migrate_and_sync_fts()
+
 def run_feed_runner_periodically():
     while True:
         try:
             print("[FeedRunner] Running feed_runner.py…")
             subprocess.run(["python3", "./feeds/feed_runner.py"], check=True)
-            print("[FeedRunner] Done. Sleeping for 10 minutes.")
+            print("[FeedRunner] Done. Syncing FTS5 table…")
+            migrate_and_sync_fts()
+            print("[FeedRunner] FTS5 sync complete. Sleeping for 10 minutes.")
         except Exception as e:
             print(f"[FeedRunner] Error: {e}")
         time.sleep(600)
@@ -67,20 +92,10 @@ async def lifespan(app: FastAPI):
     thread.start()
     yield
 
-# --- Use lifespan for startup logic
 app.router.lifespan_context = lifespan
 
 app.include_router(api.router, prefix="/api")
 app.include_router(neutrino.router, prefix="/neutrino")
-
-# --- Models ---
-class ThreatCheckResponse(BaseModel):
-    match: bool
-    value: str
-    category: Optional[str] = None
-    source: Optional[str] = None
-    severity: Optional[str] = None
-    notes: Optional[str] = None
 
 # --- Helper ---
 def query_threat_db(indicator_type: str, value: str) -> ThreatCheckResponse:
@@ -97,7 +112,6 @@ def query_threat_db(indicator_type: str, value: str) -> ThreatCheckResponse:
     else:
         return ThreatCheckResponse(match=False, value=value)
 
-# --- API endpoints ---
 @app.get("/check", response_model=ThreatCheckResponse)
 def check_threat(
     type: str = Query(..., pattern="^(ip|email|domain)$"),
@@ -123,7 +137,6 @@ def search_threats(q: str, limit: int = 50):
     start = _time.time()
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
-
     # -- 1. Exact match (fast, indexed)
     cur.execute("""
         SELECT value, category, source, severity, notes
@@ -132,7 +145,6 @@ def search_threats(q: str, limit: int = 50):
         LIMIT ?
     """, (q, limit))
     rows = cur.fetchall()
-
     # -- 2. Starts-with match (still uses index)
     if not rows:
         cur.execute("""
@@ -142,7 +154,6 @@ def search_threats(q: str, limit: int = 50):
             LIMIT ?
         """, (f"{q}%", limit))
         rows = cur.fetchall()
-
     # -- 3. Contains (fuzzy, SLOW, last resort)
     if not rows:
         cur.execute("""
@@ -152,9 +163,6 @@ def search_threats(q: str, limit: int = 50):
             LIMIT ?
         """, (f"%{q}%", limit))
         rows = cur.fetchall()
-
-    # Optionally, you can expand to search category/source/notes ONLY on deep search, not always
-
     conn.close()
     print(f"[Search] Took {_time.time() - start:.3f} sec for query: {q} [{len(rows)} results]")
     return [
@@ -162,6 +170,27 @@ def search_threats(q: str, limit: int = 50):
         for row in rows
     ]
 
+# --- FTS5 Search Endpoint (THIS IS THE FAST ONE) ---
+@app.get("/fts_search", response_model=List[ThreatCheckResponse])
+def fts_search(q: str, limit: int = 50):
+    import time as _time
+    start = _time.time()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    # FTS5 full-text search across all columns
+    cur.execute("""
+        SELECT value, category, source, severity, notes
+        FROM threat_indicators_fts
+        WHERE threat_indicators_fts MATCH ?
+        LIMIT ?
+    """, (q, limit))
+    rows = cur.fetchall()
+    conn.close()
+    print(f"[FTS Search] Took {_time.time() - start:.3f} sec for query: {q} [{len(rows)} results]")
+    return [
+        ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
+        for row in rows
+    ]
 
 @app.get("/stats/entries")
 def get_entry_count():
@@ -197,9 +226,6 @@ def increment_search():
     global search_counter
     search_counter += 1
     return {"count": search_counter}
-
-
-
 
 @app.get("/stats/type-breakdown")
 def get_type_breakdown():

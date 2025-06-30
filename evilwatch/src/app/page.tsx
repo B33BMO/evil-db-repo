@@ -51,7 +51,7 @@ export default function Home() {
     if (!query.trim()) return;
     try {
       // Explicitly type the data
-      const resp = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const resp = await fetch(`/api/fts_search?q=${encodeURIComponent(query)}`);
       const data: ThreatInfo[] = await resp.json();
       let threat: ThreatInfo = null;
   
