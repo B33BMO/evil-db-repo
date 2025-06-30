@@ -60,7 +60,7 @@ def fts_search(q: str, limit: int = 50):
     cur.execute("""
         SELECT value, category, source, severity, notes
         FROM threat_indicators_fts
-        WHERE threat_indicators_fts MATCH ?
+        WHERE MATCH ?
         LIMIT ?
     """, (q, limit))
     rows = cur.fetchall()
@@ -70,6 +70,7 @@ def fts_search(q: str, limit: int = 50):
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
     ]
+
 
 
 @router.get("/fallback")
