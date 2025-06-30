@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import {
   FaLock, FaDatabase, FaSearch, FaArrowLeft, FaGlobe, FaShieldAlt
 } from 'react-icons/fa';
+import { FaTimes } from 'react-icons/fa';
+
 
 type GeoInfo = {
   ip: string;
@@ -158,14 +160,15 @@ export default function Home() {
   const ResultModal = () => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
       <div className="relative w-full max-w-4xl mx-auto rounded-2xl bg-[#191a1f] shadow-2xl flex flex-col md:flex-row overflow-hidden border border-[#23232b]">
-        {/* Close Button */}
-        <button
-          className="absolute top-4 left-4 text-gray-400 hover:text-red-400 bg-[#23262b] p-2 rounded-full z-10 transition"
-          onClick={handleBack}
-          title="Close"
-        >
-          <FaArrowLeft className="w-5 h-5" />
-        </button>
+        {/* Close (X) Button in Top Right */}
+<button
+  className="absolute top-4 right-4 text-gray-400 hover:text-red-400 bg-[#23262b] p-2 rounded-full z-10 transition focus:outline-none shadow-md"
+  onClick={handleBack}
+  title="Close"
+>
+  <FaTimes className="w-5 h-5" />
+</button>
+
         {/* Info Panel */}
         <div className="flex-1 min-w-[270px] p-8 flex flex-col gap-4 bg-gradient-to-b from-[#23272f]/70 to-[#181a20]/95">
           <h2 className="text-2xl font-bold text-[#7fd1f7] mb-2 flex items-center gap-2">
