@@ -61,13 +61,13 @@ def fts_search(q: str, limit: int = 50):
     search = q.replace('"', '""')  # escape inner double quotes
     # This is a plain Python string, NOT an f-string!
     sql = """
-        SELECT value, category, source, severity, notes
-        FROM threat_indicators_fts
-        WHERE MATCH ?
-        LIMIT ?
-    """
-    # The parameter here *must* be the exact quoted string (e.g. '"192.168.1.1"')
+    SELECT value, category, source, severity, notes
+    FROM threat_indicators_fts
+    WHERE threat_indicators_fts MATCH ?
+    LIMIT ?
+"""
     cur.execute(sql, (f'"{search}"', int(limit)))
+
     rows = cur.fetchall()
     conn.close()
     print(f"[FTS Search] Took {_time.time() - start:.3f} sec for query: {q} [{len(rows)} results]")
