@@ -73,8 +73,9 @@ export default function Home() {
       setSelectedThreat(threat);
       setShowResult(true);
 
-      if (isIP(threat.value)) {
-        const enrichResp = await fetch(`/api/fallback?value=${encodeURIComponent(threat.value)}`);
+      const indicatorValue = threat.value?.split(",")[0]?.trim() || threat.value;
+if (isIP(indicatorValue)) {
+  const enrichResp = await fetch(`/api/fallback?value=${encodeURIComponent(indicatorValue)}`);
         const enrich = await enrichResp.json();
 
         if (enrich.geo && enrich.geo.status !== "fail") {
