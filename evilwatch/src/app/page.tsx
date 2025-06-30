@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { useState, useEffect } from 'react';
-import { FaLock, FaDatabase, FaSearch, FaArrowLeft, FaGlobe } from 'react-icons/fa';
+import { FaLock, FaDatabase, FaSearch, FaArrowLeft, FaGlobe, FaShieldAlt } from 'react-icons/fa';
 
 type GeoInfo = {
   ip: string;
@@ -50,11 +50,9 @@ export default function Home() {
   const handleSearch = async () => {
     if (!query.trim()) return;
     try {
-      // Explicitly type the data
       const resp = await fetch(`/api/fts_search?q=${encodeURIComponent(query)}`);
       const data: ThreatInfo[] = await resp.json();
       let threat: ThreatInfo = null;
-  
       if (Array.isArray(data) && data.length && data[0]?.value) {
         threat = {
           value: data[0].value,
@@ -74,12 +72,11 @@ export default function Home() {
       }
       setSelectedThreat(threat);
       setShowResult(true);
-  
-      // Enrichment lookup...
+
       if (isIP(threat.value)) {
         const enrichResp = await fetch(`/api/fallback?value=${encodeURIComponent(threat.value)}`);
         const enrich = await enrichResp.json();
-  
+
         if (enrich.geo && enrich.geo.status !== "fail") {
           setGeoInfo({
             ip: enrich.geo.query || threat.value,
@@ -92,7 +89,7 @@ export default function Home() {
         } else {
           setGeoInfo(null);
         }
-  
+
         if (enrich.neutrino) {
           setNeutrinoInfo({
             blocklist: enrich.neutrino.blocklist ?? false,
@@ -107,7 +104,7 @@ export default function Home() {
         setGeoInfo(null);
         setNeutrinoInfo(null);
       }
-  
+
       await fetch('/api/stats/increment-search', { method: 'POST' });
       setSearchCount((prev) => prev + 1);
     } catch (err) {
@@ -115,7 +112,7 @@ export default function Home() {
       setError("Failed to fetch search results.");
     }
   };
-  
+
   const handleBack = () => {
     setShowResult(false);
     setQuery('');
@@ -126,7 +123,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Stats, CVEs, etc
     (async () => {
       try {
         const entries = await fetch("/api/stats/entries").then(r => r.json());
@@ -155,51 +151,46 @@ export default function Home() {
     })();
   }, []);
 
-  // MODAL OVERLAY!
+  // Modal Overlay - Clean, glassy, non-terminal, with two panels
   const ResultModal = () => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm transition-all">
-      <div className="relative w-full max-w-4xl mx-auto rounded-2xl bg-[#181a20] shadow-2xl flex flex-col md:flex-row overflow-hidden border-2 border-[#323232]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="relative w-full max-w-4xl mx-auto rounded-2xl bg-[#181a20] shadow-2xl flex flex-col md:flex-row overflow-hidden border border-[#27292f]">
         {/* Close Button */}
         <button
-          className="absolute top-4 right-4 text-gray-400 hover:text-red-400 bg-[#23262b] p-2 rounded-full z-10 transition"
+          className="absolute top-4 left-4 text-gray-400 hover:text-red-400 bg-[#23262b] p-2 rounded-full z-10 transition"
           onClick={handleBack}
           title="Close"
         >
           <FaArrowLeft className="w-5 h-5" />
         </button>
-
-        {/* Left: Info */}
-        <div className="flex-1 p-8 flex flex-col gap-4 min-w-[280px] bg-gradient-to-b from-[#22242a] to-[#181a20]">
-          <div className="font-mono text-green-300 text-lg tracking-tight border-b border-[#323232] pb-2 mb-2">
-            <span className="block text-xl font-bold text-[#7fd1f7] mb-2">IP Information:</span>
-            <div className="whitespace-pre leading-tight">
-{`--------------------------------------
- IP Address   : ${geoInfo?.ip || selectedThreat?.value || "Unknown"}
- Location     : ${geoInfo?.city || "Unknown"}, ${geoInfo?.country || "Unknown"}
- ISP          : ${geoInfo?.isp || "Unknown"}
- ASN          : Unknown
- Timezone     : Unknown
- Coordinates  : ${
-    geoInfo && geoInfo.lat && geoInfo.lon
-      ? `${geoInfo.lat}, ${geoInfo.lon}`
-      : "Unknown"
-  }
---------------------------------------`}
-            </div>
-          </div>
-          <div className="mt-4">
-            <span className="text-lg font-bold text-[#f87171]">Detection/Reason:</span>
-            <div className="font-mono text-[#d1d5db] mt-2 text-sm bg-[#23272f] rounded-lg p-3">
-              <div><span className="font-semibold">Source:</span> {selectedThreat?.source}</div>
-              <div><span className="font-semibold">Category:</span> {selectedThreat?.category}</div>
-              <div><span className="font-semibold">Severity:</span> {selectedThreat?.severity}</div>
-              <div><span className="font-semibold">Notes:</span> {selectedThreat?.notes}</div>
-            </div>
-          </div>
+        {/* Info Panel */}
+        <div className="flex-1 min-w-[270px] p-8 flex flex-col gap-4 bg-gradient-to-b from-[#20242a]/70 to-[#181a20]/95">
+          <h2 className="text-2xl font-bold text-[#7fd1f7] mb-2 flex items-center gap-2">
+            <FaShieldAlt /> Indicator Details
+          </h2>
+          <dl className="grid grid-cols-2 gap-y-3 gap-x-4 text-sm md:text-base">
+            <dt className="font-semibold text-[#a3e635]">Indicator</dt>
+            <dd className="col-span-1">{selectedThreat?.value}</dd>
+            <dt className="font-semibold text-[#a3e635]">Category</dt>
+            <dd>{selectedThreat?.category}</dd>
+            <dt className="font-semibold text-[#a3e635]">Source</dt>
+            <dd>{selectedThreat?.source}</dd>
+            <dt className="font-semibold text-[#a3e635]">Severity</dt>
+            <dd>{selectedThreat?.severity}</dd>
+            <dt className="font-semibold text-[#a3e635]">Notes</dt>
+            <dd className="col-span-1">{selectedThreat?.notes}</dd>
+            <dt className="font-semibold text-[#a3e635]">Country</dt>
+            <dd>{geoInfo?.country || "Unknown"}</dd>
+            <dt className="font-semibold text-[#a3e635]">City</dt>
+            <dd>{geoInfo?.city || "Unknown"}</dd>
+            <dt className="font-semibold text-[#a3e635]">ISP</dt>
+            <dd>{geoInfo?.isp || "Unknown"}</dd>
+            <dt className="font-semibold text-[#a3e635]">Coordinates</dt>
+            <dd>{geoInfo && geoInfo.lat && geoInfo.lon ? `${geoInfo.lat}, ${geoInfo.lon}` : "Unknown"}</dd>
+          </dl>
         </div>
-
-        {/* Right: Map */}
-        <div className="flex-1 min-w-[300px] bg-[#23272f] p-6 flex flex-col items-center justify-center border-l border-[#323232]">
+        {/* Map Panel */}
+        <div className="flex-1 min-w-[300px] bg-[#23272f] p-8 flex flex-col items-center justify-center border-l border-[#323232]">
           <h4 className="text-lg font-semibold mb-2 text-[#7fd1f7] flex items-center">
             <FaGlobe className="mr-2" /> Location Map
           </h4>
@@ -220,8 +211,10 @@ export default function Home() {
 
       {/* Blacklist/Neutrino info bar (sticky at bottom of modal) */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-[95vw] max-w-2xl">
-        <div className="flex items-center gap-6 bg-[#202126] shadow-xl border border-[#323232] rounded-xl px-6 py-4 justify-between">
-          <div className="flex-1 text-lg font-bold text-[#7fd1f7]">Blacklist / Neutrino Status</div>
+        <div className="flex items-center gap-6 bg-[#202126] shadow-xl border border-[#323232] rounded-xl px-6 py-4 justify-between backdrop-blur-md">
+          <div className="flex-1 text-lg font-bold text-[#7fd1f7] flex items-center gap-2">
+            <FaShieldAlt /> Blacklist / Neutrino Status
+          </div>
           <div className="flex-1 flex flex-col gap-1 font-mono text-sm">
             <div>
               <span className="font-semibold">Blocklisted:</span>{" "}
@@ -309,7 +302,7 @@ export default function Home() {
           </div>
         </div>
       ) : (
-        // Show modal overlay instead of results grid
+        // Modal overlay (nice, no terminal style)
         <ResultModal />
       )}
 
@@ -328,7 +321,7 @@ export default function Home() {
           <div className="mt-8 text-left max-w-xl mx-auto">
             <h3 className="text-lg font-bold mb-2 text-[#cccccc]">API Endpoints</h3>
             <ul className="text-[#bbbbbb] text-sm space-y-2 font-mono">
-              <li><span className="text-[#7fd1f7]">GET</span> /api/search?q=&lt;value&gt; – Search for threats by IP, domain, or email</li>
+              <li><span className="text-[#7fd1f7]">GET</span> /api/fts_search?q=&lt;value&gt; – Search for threats by IP, domain, or email</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/stats/entries – Total DB entry count</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/stats/type-breakdown – Count by type/category</li>
               <li><span className="text-[#7fd1f7]">GET</span> /api/stats/searches – Total search count (because who doesn’t love stats?)</li>
