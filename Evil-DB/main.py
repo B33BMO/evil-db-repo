@@ -170,20 +170,21 @@ def search_threats(q: str, limit: int = 50):
         for row in rows
     ]
 
-# --- FTS5 Search Endpoint (THIS IS THE FAST ONE) ---
-@app.get("/fts_search", response_model=List[ThreatCheckResponse])
+@router.get("/fts_search", response_model=List[ThreatCheckResponse])
 def fts_search(q: str, limit: int = 50):
     import time as _time
     start = _time.time()
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
     cur = conn.cursor()
-    # FTS5 full-text search across all columns
-    cur.execute("""
+    # Escape single quotes for safety
+    search = q.replace("'", "''")
+    # DO NOT prefix MATCH with table name!
+    cur.execute(f"""
         SELECT value, category, source, severity, notes
         FROM threat_indicators_fts
-        WHERE threat_indicators_fts MATCH ?
-        LIMIT ?
-    """, (q, limit))
+        WHERE MATCH '{search}'
+        LIMIT {int(limit)}
+    """)
     rows = cur.fetchall()
     conn.close()
     print(f"[FTS Search] Took {_time.time() - start:.3f} sec for query: {q} [{len(rows)} results]")
@@ -191,6 +192,7 @@ def fts_search(q: str, limit: int = 50):
         ThreatCheckResponse(match=True, value=row[0], category=row[1], source=row[2], severity=row[3], notes=row[4])
         for row in rows
     ]
+
 
 @app.get("/stats/entries")
 def get_entry_count():
