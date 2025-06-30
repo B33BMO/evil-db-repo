@@ -15,6 +15,26 @@ print("===========================")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(BASE_DIR)
 DB_PATH = os.path.join(PROJECT_ROOT, "db", "threats.db")
+def neutrino_blocklist():
+    print("🛡️  Neutrino API Blocklist Bulk Download…")
+    user_id = "b33bmo"
+    api_key = "m8Jm8MF4qhXJqWE8cS6xJVeb9I2dvU46TN3EShO6E800FC9Z"
+    url = "https://neutrinoapi.net/ip-blocklist-download"
+    try:
+        resp = requests.post(url, data={"user-id": user_id, "api-key": api_key}, timeout=60)
+        resp.raise_for_status()
+        count = 0
+        for ip in resp.text.splitlines():
+            ip = ip.strip()
+            if not ip or ip.startswith("#"):
+                continue
+            insert_ip(ip, "blocklist", "neutrino_bulk", "high", "Neutrino bulk blocklist")
+            count += 1
+            if count % 10000 == 0:
+                print(f"  ...imported {count} IPs so far")
+        print(f"✅ Neutrino bulk: {count} IPs imported")
+    except Exception as e:
+        print(f"❌ Neutrino blocklist download failed: {e}")
 
 def dedupe_and_index():
     print("🧹 Deduplicating and indexing database...")
