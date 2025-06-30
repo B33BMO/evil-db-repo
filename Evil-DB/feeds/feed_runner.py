@@ -36,6 +36,121 @@ def neutrino_blocklist():
     except Exception as e:
         print(f"❌ Neutrino blocklist download failed: {e}")
 
+def firehol_level1():
+    print("🔥 FireHOL...")
+    url = "https://raw.githubusercontent.com/firehol/blocklist-ipsets/master/firehol_level1.netset"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "malicious", "firehol_level1", "high", "Auto-imported")
+
+def blocklist_de():
+    print("💣 blocklist.de...")
+    url = "https://lists.blocklist.de/lists/all.txt"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "ssh_brute", "blocklist_de", "medium", "Aggressive brute force")
+
+def artillery_banlist():
+    print("🛡️  Artillery banlist...")
+    url = "https://raw.githubusercontent.com/trustedsec/artillery/master/banlist.txt"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "honeypot", "artillery", "medium", "Honeypot caught")
+
+def malwaredomainlist():
+    print("🦠 MalwareDomainList...")
+    url = "http://www.malwaredomainlist.com/hostslist/hosts.txt"
+    lines = get_feed_lines(url)
+    for line in lines:
+        parts = line.split()
+        if len(parts) >= 2:
+            insert_ip(parts[0], "malware", "malwaredomainlist", "medium", "Malware-serving domain")
+
+def ciarmy():
+    print("🪖 CIArmy...")
+    url = "http://cinsscore.com/list/ci-badguys.txt"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "scanner", "ciarmy", "medium", "Suspicious scanning IP")
+
+def tor_exit_nodes():
+    print("🧅 Tor Exit Nodes...")
+    url = "https://check.torproject.org/torbulkexitlist"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "tor", "tor_exit", "low", "Tor exit node")
+
+def abusech():
+    print("💀 Abuse.ch Feodo Tracker...")
+    url = "https://feodotracker.abuse.ch/downloads/ipblocklist.txt"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "malware", "abusech_feodo", "high", "Feodo C2")
+
+def emerging_threats():
+    print("🚨 Emerging Threats Compromised...")
+    url = "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "compromised", "emerging_threats", "high", "Compromised Host")
+
+def spamhaus_drop():
+    print("🛑 Spamhaus DROP...")
+    url = "https://www.spamhaus.org/drop/drop.txt"
+    lines = get_feed_lines(url)
+    for line in lines:
+        if ";" in line:
+            ip = line.split(";")[0].strip()
+            insert_ip(ip, "spam", "spamhaus_drop", "high", "Spamhaus DROP")
+
+def alienvault_otx():
+    print("👽 AlienVault OTX...")
+    url = "https://reputation.alienvault.com/reputation.generic"
+    lines = get_feed_lines(url)
+    for line in lines:
+        if "#" in line:
+            ip = line.split("#")[0].strip()
+        else:
+            ip = line.strip()
+        if ip:
+            insert_ip(ip, "malicious", "alienvault_otx", "medium", "AlienVault OTX bad IP")
+
+def cisco_talos():
+    print("🦾 Cisco Talos Intelligence...")
+    url = "https://talosintelligence.com/documents/ip-blacklist"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "malicious", "cisco_talos", "high", "Cisco Talos blacklist")
+
+def openphish():
+    print("🎣 OpenPhish...")
+    url = "https://openphish.com/feed.txt"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "phishing", "openphish", "high", "OpenPhish Indicator")
+
+def blocklistpro():
+    print("🧨 Blocklist Pro Threat Feed...")
+    url = "https://blocklistpro.com/downloads/BlocklistPro.txt"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "malicious", "blocklistpro", "high", "BlocklistPro bad IP")
+
+def sans_dshield():
+    print("⚔️ SANS DShield Suspicious IPs...")
+    url = "https://www.dshield.org/ipsascii.html?limit=10000"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "suspicious", "sans_dshield", "medium", "DShield Suspicious IP")
+
+def abusech_sslbl():
+    print("🔒 Abuse.ch SSL Blacklist...")
+    url = "https://sslbl.abuse.ch/blacklist/sslipblacklist.txt"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "malicious", "abusech_sslbl", "high", "SSL Blacklist")
+
+def cybercrime_tracker():
+    print("💀 CyberCrime Tracker...")
+    url = "https://cybercrime-tracker.net/all.php"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "malicious", "cybercrime_tracker", "high", "Cybercrime Tracker bad IP")
+
+def urlhaus():
+    print("🦠 Abuse.ch URLHaus Payloads...")
+    url = "https://urlhaus.abuse.ch/downloads/text_online/"
+    for ip in get_feed_lines(url):
+        insert_ip(ip, "malicious", "abusech_urlhaus", "high", "URLHaus bad IP")
+
+
 def dedupe_and_index():
     print("🧹 Deduplicating and indexing database...")
     conn = sqlite3.connect(DB_PATH)
